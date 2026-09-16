@@ -252,7 +252,9 @@ public class AdminUserService {
     }
 
     /**
-     * 读取当前计划：优先 ACTIVE，没有则取最近一条计划。
+     * 读取用户当前计划：只认 ACTIVE。
+     * 一个用户同时只有一条 ACTIVE 计划（重新生成时旧计划会被置为 REPLACED），
+     * 因此这里不回退到历史计划，避免管理端把已替换的计划误显示成“当前计划”。
      */
     private TrainingPlan selectCurrentPlan(Long userId) {
         List<TrainingPlan> activePlans = trainingPlanMapper.selectList(new LambdaQueryWrapper<TrainingPlan>()
@@ -261,15 +263,7 @@ public class AdminUserService {
                 .orderByDesc(TrainingPlan::getCreatedAt)
                 .orderByDesc(TrainingPlan::getId)
                 .last("LIMIT 1"));
-        if (!activePlans.isEmpty()) {
-            return activePlans.get(0);
-        }
-        List<TrainingPlan> plans = trainingPlanMapper.selectList(new LambdaQueryWrapper<TrainingPlan>()
-                .eq(TrainingPlan::getUserId, userId)
-                .orderByDesc(TrainingPlan::getCreatedAt)
-                .orderByDesc(TrainingPlan::getId)
-                .last("LIMIT 1"));
-        return plans.isEmpty() ? null : plans.get(0);
+        return activePlans.isEmpty() ? null : activePlans.get(0);
     }
 
     private List<CheckinRecord> selectCheckinRecords(Long userId) {

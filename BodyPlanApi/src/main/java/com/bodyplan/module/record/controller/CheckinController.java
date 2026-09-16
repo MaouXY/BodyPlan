@@ -39,7 +39,7 @@ public class CheckinController {
     }
 
     @PostMapping
-    @Operation(summary = "打卡", description = "幂等：同一用户+明细+日期只允许一条记录；请求体可为空（等价于按当前 ACTIVE 计划今天打卡）")
+    @Operation(summary = "打卡", description = "幂等：同一用户+明细+日期只允许一条记录；撤销后重新打卡会复活原记录（不新增行）。请求体可为空（等价于按当前 ACTIVE 计划今天打卡）；带 planItemId 时以明细的 training_date 为准")
     public ApiResponse<CheckinResponse> create(
             @Parameter(description = "打卡请求体，所有字段均可空")
             @RequestBody(required = false) CheckinSaveRequest request) {

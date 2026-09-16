@@ -24,9 +24,14 @@ import com.bodyplan.module.training.mapper.TrainingPlanMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.sql.Date;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
@@ -45,9 +50,16 @@ import java.util.TreeSet;
 /**
  * 打卡记录业务：今日任务、打卡、撤销打卡、打卡日历、连续打卡、打卡历史分页。
  *
- * <p>幂等设计：打卡唯一键是 (user_id, plan_item_id, training_date)。写库前先按该三元组查重
- * （命中直接返回 CHECKIN_ALREADY_EXISTS），再依赖数据库唯一键 uk_checkin_item_date 兜底，
- * 并发重复提交时把 DuplicateKeyException 同样转成 CHECKIN_ALREADY_EXISTS，两道保证结果一致。</p>
+ * <p>幂等设计：打卡唯一键是 (user_id, plan_item_id, training_date)。写库前先按该三元组查重，
+ * 再依赖数据库唯一键 uk_checkin_item_date 兜底，并发重复提交时把 DuplicateKeyException 同样转成
+ * CHECKIN_ALREADY_EXISTS，两道保证结果一致。</p>
+ *
+ * <p>撤销后可以重新打卡：查重时会连"已撤销（deleted=1）"的记录一起看，
+ * 命中活记录才算重复打卡；命中的是撤销记录时不新增行，而是把原记录复活（deleted=0 并覆盖本次入参），
+ * 否则唯一键（包含逻辑删除的行）会让用户"撤销了却打不了卡"。</p>
+ *
+ * <p>注意：MySQL 唯一索引对 NULL 不去重，(user_id, plan_item_id, training_date) 在 plan_item_id 为空
+ * （自由训练）时不具备去重能力，所以"自由训练一天一次"完全由本服务层的查重保证。</p>
  *
  * <p>日期语义统一用 LocalDate（DATE 列），createdAt 由本服务显式赋值，
  * 因为表字段是 DEFAULT CURRENT_TIMESTAMP，MyBatis-Plus 插入后不会回填。</p>
@@ -84,9 +96,53 @@ public class CheckinService {
     /** 月份格式 yyyy-MM */
     private static final DateTimeFormatter MONTH_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM");
 
+    /**
+     * 查同键打卡记录（带明细）。故意不写 deleted = 0：需要看到撤销过的行，用于"复活"。
+     * 同一键最多一行（唯一键保证），ORDER BY 只是防御性写法。
+     */
+    private static final String SELECT_EXISTING_WITH_ITEM_SQL = """
+            SELECT id, user_id, plan_id, plan_item_id, training_date, finished, duration_min, feeling, remark, created_at, deleted
+              FROM checkin_record
+             WHERE user_id = ?
+               AND training_date = ?
+               AND plan_item_id = ?
+             ORDER BY deleted ASC, id DESC
+             LIMIT 1
+            """;
+
+    /**
+     * 查同键打卡记录（自由训练，plan_item_id 为空）。MySQL 唯一索引对 NULL 不去重，
+     * 这个键理论上可能有多行：优先取活记录（deleted ASC），都是撤销记录则取最新一条复活。
+     */
+    private static final String SELECT_EXISTING_FREE_SQL = """
+            SELECT id, user_id, plan_id, plan_item_id, training_date, finished, duration_min, feeling, remark, created_at, deleted
+              FROM checkin_record
+             WHERE user_id = ?
+               AND training_date = ?
+               AND plan_item_id IS NULL
+             ORDER BY deleted ASC, id DESC
+             LIMIT 1
+            """;
+
+    /** 复活被撤销的打卡记录：deleted 置 0、finished 置 1，并覆盖本次入参；AND deleted = 1 做并发 CAS */
+    private static final String REVIVE_CHECKIN_SQL = """
+            UPDATE checkin_record
+               SET deleted = 0,
+                   finished = 1,
+                   plan_id = ?,
+                   duration_min = ?,
+                   feeling = ?,
+                   remark = ?,
+                   created_at = ?
+             WHERE id = ?
+               AND deleted = 1
+            """;
+
     private final CheckinRecordMapper checkinRecordMapper;
     private final TrainingPlanMapper trainingPlanMapper;
     private final TrainingPlanItemMapper trainingPlanItemMapper;
+    /** 只用于绕过 @TableLogic 读/复活已撤销的打卡记录（同一个 DataSource，参与当前事务） */
+    private final JdbcTemplate jdbcTemplate;
 
     // ------------------------------------------------------------------
     // 1. 今日任务
@@ -198,7 +254,17 @@ public class CheckinService {
     // ------------------------------------------------------------------
 
     /**
-     * 打卡（幂等）。事务内：插入 checkin_record（finished=1），并把对应 training_plan_item 状态置为 DONE。
+     * 打卡。判定顺序：
+     * <ol>
+     *   <li>校验 durationMin / feeling / remark（非法直接 BAD_REQUEST）；</li>
+     *   <li>planItemId 非空时校验明细存在（PLAN_ITEM_NOT_FOUND）且属于当前用户（CHECKIN_NOT_BELONG_TO_USER），
+     *       并解析 planId（明细所属计划优先，其次请求值，最后当前 ACTIVE 计划）；</li>
+     *   <li>确定 trainingDate：有明细用明细的 training_date，自由训练用请求值（缺省今天）；</li>
+     *   <li>按 (user_id, plan_item_id, training_date) 查重（含已撤销记录）：命中活记录 → CHECKIN_ALREADY_EXISTS；
+     *       命中撤销记录 → 复活该行并覆盖本次入参，不新增行，同时把明细置回 DONE；</li>
+     *   <li>都没有 → 事务内插入 checkin_record（finished=1）并把明细置为 DONE，数据库唯一键兜底并发，
+     *       DuplicateKeyException 同样转成 CHECKIN_ALREADY_EXISTS。</li>
+     * </ol>
      *
      * @param request 打卡请求，允许整体为空（等价于"按当前 ACTIVE 计划今天打卡"）
      */
@@ -219,8 +285,21 @@ public class CheckinService {
         // 日期口径：带明细时一律以明细的 training_date 为准（忽略请求值），只有自由训练才用请求日期
         LocalDate trainingDate = resolveTrainingDate(userId, safeRequest.trainingDate(), planItem);
 
-        // 幂等第 1 道：写库前先查重
-        assertNotCheckedIn(userId, planItemId, trainingDate);
+        // 幂等 + 复活：连已撤销（deleted=1）的记录一起查，命中活记录才算重复打卡
+        CheckinRecord existing = findCheckinIncludingDeleted(userId, planItemId, trainingDate);
+        if (existing != null && !isDeleted(existing)) {
+            log.error("checkin create rejected, scenario=checkin-create, reason=already-exists, userId={}, planItemId={}, trainingDate={}",
+                    userId, planItemId, trainingDate);
+            throw new BusinessException(ErrorCode.CHECKIN_ALREADY_EXISTS, "今天已经打过卡了");
+        }
+        if (existing != null) {
+            // 命中撤销过的记录：不能 insert（唯一键包含逻辑删除的行），改为复活该行并覆盖本次入参
+            CheckinRecord revived = reviveCheckin(existing, planId, durationMin, feeling, remark);
+            markPlanItemDone(planItem);
+            log.info("checkin revived, scenario=checkin-create, userId={}, checkinId={}, planItemId={}, trainingDate={}",
+                    userId, revived.getId(), planItemId, trainingDate);
+            return CheckinResponse.from(revived);
+        }
 
         CheckinRecord checkinRecord = new CheckinRecord();
         checkinRecord.setUserId(userId);
@@ -535,24 +614,87 @@ public class CheckinService {
     }
 
     /**
-     * 写库前查重：同一 (userId, planItemId, trainingDate) 只允许一条打卡记录。
-     * 自由训练（planItemId 为空）同样按"每天一次"处理。
+     * 查同键记录，**包含已撤销（deleted=1）的行**，用于幂等判定与"撤销后复活"。
+     *
+     * <p>为什么要绕开 {@code @TableLogic}：MyBatis-Plus 对带逻辑删除的实体，会在 where 之后
+     * 无条件追加 {@code AND deleted=0}，所以 {@code apply("deleted = 1")} 会变成
+     * {@code deleted = 1 AND deleted = 0}（永远查不到），{@code last("...")} 只能追加到语句末尾、
+     * 会破坏 AND/OR 优先级，都不安全；而唯一键 uk_checkin_item_date 是包含逻辑删除行的，
+     * 不看到撤销行就会出现"撤销了却打不了卡"。因此这里直接用参数化 SQL 读取
+     * （同一个 DataSource，走 JdbcTemplate 自动参与当前 @Transactional 事务）。</p>
+     *
+     * <p>自由训练（planItemId 为空）按 (user_id, training_date, plan_item_id IS NULL) 命中：
+     * MySQL 唯一索引对 NULL 不去重，唯一键在这里不起作用，"自由训练一天一次"由本方法配合
+     * {@link #create} 在服务层保证。同一键理论上可能存在多行时，优先取活记录（deleted=0），
+     * 都是撤销记录则取最新一条复活。</p>
+     *
+     * @return 同键记录（优先未撤销的）；没有则 null
      */
-    private void assertNotCheckedIn(Long userId, Long planItemId, LocalDate trainingDate) {
-        LambdaQueryWrapper<CheckinRecord> wrapper = new LambdaQueryWrapper<CheckinRecord>()
-                .eq(CheckinRecord::getUserId, userId)
-                .eq(CheckinRecord::getTrainingDate, trainingDate);
-        if (planItemId == null) {
-            wrapper.isNull(CheckinRecord::getPlanItemId);
-        } else {
-            wrapper.eq(CheckinRecord::getPlanItemId, planItemId);
-        }
-        Long exists = checkinRecordMapper.selectCount(wrapper);
-        if (exists != null && exists > 0) {
-            log.error("checkin create rejected, scenario=checkin-create, reason=already-exists, userId={}, planItemId={}, trainingDate={}",
-                    userId, planItemId, trainingDate);
+    private CheckinRecord findCheckinIncludingDeleted(Long userId, Long planItemId, LocalDate trainingDate) {
+        String sql = planItemId == null ? SELECT_EXISTING_FREE_SQL : SELECT_EXISTING_WITH_ITEM_SQL;
+        Object[] args = planItemId == null
+                ? new Object[]{userId, Date.valueOf(trainingDate)}
+                : new Object[]{userId, Date.valueOf(trainingDate), planItemId};
+        List<CheckinRecord> rows = jdbcTemplate.query(sql, (rs, rowNum) -> mapCheckinRow(rs), args);
+        return rows.isEmpty() ? null : rows.get(0);
+    }
+
+    /**
+     * 复活撤销过的打卡记录：deleted 置回 0、finished 置 1，并按本次入参覆盖 plan_id / duration_min /
+     * feeling / remark，created_at 刷新为当前时间。加 {@code AND deleted = 1} 做 CAS，
+     * 并发下被别的请求先复活时返回 0 行，此时按"已存在打卡"处理，避免返回一条不属于本次操作的记录。
+     */
+    private CheckinRecord reviveCheckin(CheckinRecord existing, Long planId, Integer durationMin, String feeling, String remark) {
+        LocalDateTime createdAt = LocalDateTime.now();
+        int updated = jdbcTemplate.update(
+                REVIVE_CHECKIN_SQL,
+                planId,
+                durationMin,
+                feeling,
+                remark,
+                Timestamp.valueOf(createdAt),
+                existing.getId());
+        if (updated != 1) {
+            log.warn("checkin revive skipped, scenario=checkin-create, reason=concurrent-revive-or-deleted, checkinId={}, affected={}",
+                    existing.getId(), updated);
             throw new BusinessException(ErrorCode.CHECKIN_ALREADY_EXISTS, "今天已经打过卡了");
         }
+        // 返回值直接用复活后的状态，避免再查一次库
+        existing.setPlanId(planId);
+        existing.setDurationMin(durationMin);
+        existing.setFeeling(feeling);
+        existing.setRemark(remark);
+        existing.setCreatedAt(createdAt);
+        existing.setFinished(FINISHED_YES);
+        existing.setDeleted(0);
+        return existing;
+    }
+
+    /** 手工映射一行 checkin_record（JdbcTemplate 不走 MyBatis 的下划线转驼峰配置） */
+    private CheckinRecord mapCheckinRow(ResultSet rs) throws SQLException {
+        CheckinRecord record = new CheckinRecord();
+        record.setId(rs.getLong("id"));
+        record.setUserId(rs.getLong("user_id"));
+        long planId = rs.getLong("plan_id");
+        record.setPlanId(rs.wasNull() ? null : planId);
+        long planItemId = rs.getLong("plan_item_id");
+        record.setPlanItemId(rs.wasNull() ? null : planItemId);
+        Date trainingDate = rs.getDate("training_date");
+        record.setTrainingDate(trainingDate == null ? null : trainingDate.toLocalDate());
+        record.setFinished(rs.getInt("finished"));
+        int durationMin = rs.getInt("duration_min");
+        record.setDurationMin(rs.wasNull() ? null : durationMin);
+        record.setFeeling(rs.getString("feeling"));
+        record.setRemark(rs.getString("remark"));
+        Timestamp createdAt = rs.getTimestamp("created_at");
+        record.setCreatedAt(createdAt == null ? null : createdAt.toLocalDateTime());
+        record.setDeleted(rs.getInt("deleted"));
+        return record;
+    }
+
+    /** 该记录是否已被逻辑删除（撤销） */
+    private boolean isDeleted(CheckinRecord record) {
+        return record.getDeleted() != null && record.getDeleted() == 1;
     }
 
     /** 把计划明细状态置为 DONE（已经是 DONE 就不重复写库） */
