@@ -1,0 +1,54 @@
+server:
+  port: 8992
+
+spring:
+  application:
+    name: bodyplan-api
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: ${APP_DB_URL:jdbc:mysql://127.0.0.1:3306/body_plan?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai}
+    username: ${APP_DB_USERNAME:root}
+    password: ${APP_DB_PASSWORD:1829002}
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: Asia/Shanghai
+    default-property-inclusion: non_null
+
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    db-config:
+      id-type: assign_id
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+knife4j:
+  enable: true
+  setting:
+    language: ZH_CN
+    enable-swagger-models: true
+    enable-dynamic-parameter: false
+    enable-footer: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+
+app:
+  security:
+    jwt:
+      secret: ${APP_JWT_SECRET:change-this-bodyplan-secret-to-a-secure-value}
+      issuer: ${APP_JWT_ISSUER:bodyplan}
+      expiration-seconds: ${APP_JWT_EXPIRATION_SECONDS:604800}
+
+logging:
+  level:
+    com.bodyplan: info

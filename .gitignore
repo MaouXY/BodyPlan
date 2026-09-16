@@ -1,0 +1,16 @@
+# === 构建产物 ===
+target/
+dist/
+node_modules/
+
+# === 日志与本地运行文件 ===
+*.log
+*.local
+.env.local
+
+# === IDE ===
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
