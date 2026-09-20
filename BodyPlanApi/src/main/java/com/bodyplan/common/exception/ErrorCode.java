@@ -46,6 +46,7 @@ public enum ErrorCode {
     CHECKIN_NOT_FOUND(10501, "checkin record not found"),
     CHECKIN_ALREADY_EXISTS(10502, "checkin record already exists"),
     CHECKIN_NOT_BELONG_TO_USER(10503, "checkin record does not belong to current user"),
+    CHECKIN_DATE_IN_FUTURE(10504, "checkin date is in the future"),
 
     RUNNING_RECORD_NOT_FOUND(10601, "running record not found"),
     RUNNING_RECORD_INVALID(10602, "running record invalid"),

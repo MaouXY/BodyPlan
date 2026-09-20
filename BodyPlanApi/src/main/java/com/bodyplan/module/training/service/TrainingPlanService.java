@@ -122,25 +122,29 @@ public class TrainingPlanService {
         trainingPlanMapper.insert(plan);
 
         List<TrainingPlanItem> items = new ArrayList<>();
-        for (PlanRecommendationService.RecommendedDay day : recommendation.days()) {
-            int sortNo = 0;
-            for (PlanRecommendationService.RecommendedItem item : day.items()) {
-                TrainingPlanItem entity = new TrainingPlanItem();
-                entity.setPlanId(plan.getId());
-                entity.setDayIndex(day.dayIndex());
-                entity.setTrainingDate(startDate.plusDays(day.dayIndex() - 1L));
-                entity.setExerciseId(item.exercise().getId());
-                entity.setExerciseName(item.exercise().getName());
-                entity.setSets(item.sets());
-                entity.setReps(item.reps());
-                entity.setDurationSec(item.durationSec());
-                entity.setRestSec(item.restSec());
-                entity.setSortNo(++sortNo);
-                entity.setStatus(ITEM_STATUS_PENDING);
-                entity.setCreatedAt(timestamp);
-                entity.setUpdatedAt(timestamp);
-                trainingPlanItemMapper.insert(entity);
-                items.add(entity);
+        // 计划按 PLAN_WEEKS 周循环排期：每周的同一 weekday 重复一次，
+        // 否则计划只有第一周有任务，第二周起“今日任务”会全空。
+        for (int week = 0; week < PlanRecommendationService.PLAN_WEEKS; week++) {
+            for (PlanRecommendationService.RecommendedDay day : recommendation.days()) {
+                int sortNo = 0;
+                for (PlanRecommendationService.RecommendedItem item : day.items()) {
+                    TrainingPlanItem entity = new TrainingPlanItem();
+                    entity.setPlanId(plan.getId());
+                    entity.setDayIndex(day.dayIndex());
+                    entity.setTrainingDate(startDate.plusDays(day.dayIndex() - 1L).plusWeeks(week));
+                    entity.setExerciseId(item.exercise().getId());
+                    entity.setExerciseName(item.exercise().getName());
+                    entity.setSets(item.sets());
+                    entity.setReps(item.reps());
+                    entity.setDurationSec(item.durationSec());
+                    entity.setRestSec(item.restSec());
+                    entity.setSortNo(++sortNo);
+                    entity.setStatus(ITEM_STATUS_PENDING);
+                    entity.setCreatedAt(timestamp);
+                    entity.setUpdatedAt(timestamp);
+                    trainingPlanItemMapper.insert(entity);
+                    items.add(entity);
+                }
             }
         }
 
@@ -275,16 +279,18 @@ public class TrainingPlanService {
     }
 
     private TrainingPlanResponse toResponse(TrainingPlan plan, List<TrainingPlanItem> items) {
-        Map<Integer, List<TrainingPlanItem>> grouped = items.stream()
-                .collect(Collectors.groupingBy(TrainingPlanItem::getDayIndex, LinkedHashMap::new, Collectors.toList()));
+        // 按“具体训练日期”分组：计划跨多周，同一天只出现一次
+        Map<LocalDate, List<TrainingPlanItem>> grouped = items.stream()
+                .filter(item -> item.getTrainingDate() != null)
+                .collect(Collectors.groupingBy(TrainingPlanItem::getTrainingDate, LinkedHashMap::new, Collectors.toList()));
         List<PlanDayResponse> days = new ArrayList<>();
-        grouped.forEach((dayIndex, dayItems) -> days.add(new PlanDayResponse(
-                dayIndex,
-                dayItems.isEmpty() ? null : dayItems.get(0).getTrainingDate(),
-                weekdayLabel(dayIndex),
+        grouped.forEach((trainingDate, dayItems) -> days.add(new PlanDayResponse(
+                dayItems.get(0).getDayIndex(),
+                trainingDate,
+                weekdayLabel(trainingDate),
                 dayItems.stream().map(this::toItemResponse).toList()
         )));
-        days.sort((left, right) -> Integer.compare(left.dayIndex(), right.dayIndex()));
+        days.sort((left, right) -> left.trainingDate().compareTo(right.trainingDate()));
 
         int doneItems = (int) items.stream()
                 .filter(item -> ITEM_STATUS_DONE.equals(item.getStatus()))
@@ -343,6 +349,14 @@ public class TrainingPlanService {
             return null;
         }
         return WEEKDAY_LABELS[dayIndex - 1];
+    }
+
+    /** 由具体日期推导周几（多周计划里同一天只对应一个日期） */
+    private String weekdayLabel(LocalDate trainingDate) {
+        if (trainingDate == null) {
+            return null;
+        }
+        return WEEKDAY_LABELS[trainingDate.getDayOfWeek().getValue() - 1];
     }
 
     private String writeJson(Map<String, Object> snapshot) {

@@ -751,24 +751,34 @@ public class CheckinService {
      * @return 实际写库的训练日期
      */
     private LocalDate resolveTrainingDate(Long userId, String trainingDate, TrainingPlanItem planItem) {
+        LocalDate resolved;
         if (planItem != null && planItem.getTrainingDate() != null) {
             if (trainingDate != null && !trainingDate.isBlank()
                     && !trainingDate.trim().equals(planItem.getTrainingDate().toString())) {
                 log.warn("checkin create trainingDate ignored, scenario=checkin-create, userId={}, planItemId={}, requestTrainingDate={}, actualTrainingDate={}",
                         userId, planItem.getId(), trainingDate, planItem.getTrainingDate());
             }
-            return planItem.getTrainingDate();
+            resolved = planItem.getTrainingDate();
+        } else if (trainingDate == null || trainingDate.isBlank()) {
+            resolved = LocalDate.now();
+        } else {
+            try {
+                resolved = LocalDate.parse(trainingDate.trim());
+            } catch (DateTimeParseException exception) {
+                log.error("checkin create rejected, scenario=checkin-create, reason=invalid-training-date, userId={}, trainingDate={}",
+                        userId, trainingDate, exception);
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "trainingDate 格式错误，正确格式为 yyyy-MM-dd，例如 2024-06-01");
+            }
         }
-        if (trainingDate == null || trainingDate.isBlank()) {
-            return LocalDate.now();
+
+        // 禁止给未来的训练日打卡：否则打卡记录会落在未来日期，连续打卡天数与打卡日历都会失真
+        if (resolved.isAfter(LocalDate.now())) {
+            log.warn("checkin create rejected, scenario=checkin-create, reason=future-training-date, userId={}, planItemId={}, trainingDate={}",
+                    userId, planItem == null ? null : planItem.getId(), resolved);
+            throw new BusinessException(ErrorCode.CHECKIN_DATE_IN_FUTURE,
+                    "该任务还没到训练日期（" + resolved + "），当天再来打卡吧");
         }
-        try {
-            return LocalDate.parse(trainingDate.trim());
-        } catch (DateTimeParseException exception) {
-            log.error("checkin create rejected, scenario=checkin-create, reason=invalid-training-date, userId={}, trainingDate={}",
-                    userId, trainingDate, exception);
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "trainingDate 格式错误，正确格式为 yyyy-MM-dd，例如 2024-06-01");
-        }
+        return resolved;
     }
 
     /** 训练时长：可空，不能为负数 */

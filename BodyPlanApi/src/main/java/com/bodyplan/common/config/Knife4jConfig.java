@@ -30,7 +30,7 @@ public class Knife4jConfig {
                         .title("个性化健身管理系统接口文档")
                         .description("BodyPlanApi：建档评估、计划推荐、动作跟练、每日打卡、复测调整")
                         .version("1.0.0"))
-                .servers(List.of(new Server().url("http://localhost:8992")))
+                .servers(List.of(new Server().url("http://localhost:8993")))
                 .components(new Components().addSecuritySchemes("bearerAuth", securityScheme))
                 .addSecurityItem(securityRequirement);
     }
