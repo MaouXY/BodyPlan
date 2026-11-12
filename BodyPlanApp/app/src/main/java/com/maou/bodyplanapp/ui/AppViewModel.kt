@@ -1,33 +1,26 @@
 package com.maou.bodyplanapp.ui
 
 import android.app.Application
+import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.maou.bodyplanapp.data.ApiClient
-import com.maou.bodyplanapp.data.CheckinRequest
-import com.maou.bodyplanapp.data.CheckinStreak
-import com.maou.bodyplanapp.data.FitnessTestRequest
-import com.maou.bodyplanapp.data.GoalSuggestion
-import com.maou.bodyplanapp.data.LoginRequest
-import com.maou.bodyplanapp.data.PlanGenerateRequest
-import com.maou.bodyplanapp.data.ProfileResponse
-import com.maou.bodyplanapp.data.ProfileSaveRequest
-import com.maou.bodyplanapp.data.RegisterRequest
-import com.maou.bodyplanapp.data.TodayTask
-import com.maou.bodyplanapp.data.TokenStore
-import com.maou.bodyplanapp.data.TrainingPlan
+import com.maou.bodyplanapp.data.*
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import retrofit2.HttpException
+import com.google.gson.Gson
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
 
-/** App 的四个阶段：启动检查 → 登录注册 → 建档问卷 → 主界面（我的计划 / 今日打卡） */
-enum class Stage { Booting, Login, Onboarding, Ready }
+enum class Stage { Booting, ConnectionError, Login, Onboarding, Ready }
 
 class AppViewModel(application: Application) : AndroidViewModel(application) {
-
     private val store = TokenStore(application)
-
+    private val api = ApiClient.service
     var stage by mutableStateOf(Stage.Booting)
         private set
     var busy by mutableStateOf(false)
@@ -36,10 +29,15 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         private set
     var error by mutableStateOf<String?>(null)
         private set
-
+    var loadError by mutableStateOf<String?>(null)
+        private set
     var displayName by mutableStateOf("")
         private set
     var profile by mutableStateOf<ProfileResponse?>(null)
+        private set
+    var fitness by mutableStateOf<FitnessTestResponse?>(null)
+        private set
+    var editingProfile by mutableStateOf(false)
         private set
     var goalSuggestion by mutableStateOf<GoalSuggestion?>(null)
         private set
@@ -49,46 +47,80 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         private set
     var streak by mutableStateOf<CheckinStreak?>(null)
         private set
+    var calendar by mutableStateOf<CheckinCalendar?>(null)
+        private set
+    var bodyHistory by mutableStateOf<List<BodyData>>(emptyList())
+        private set
+    var planHistory by mutableStateOf<List<TrainingPlan>>(emptyList())
+        private set
+    var checkinHistory by mutableStateOf<List<CheckinResponse>>(emptyList())
+        private set
+    var calendarMonth by mutableStateOf(monthText(Calendar.getInstance()))
+        private set
 
     init {
-        val saved = store.token
-        if (saved.isNullOrBlank()) {
-            stage = Stage.Login
-        } else {
-            ApiClient.token = saved
-            displayName = store.username ?: "健身用户"
-            viewModelScope.launch { loadProfileAndRoute() }
+        ApiClient.token = store.token
+        displayName = store.username.orEmpty()
+        if (store.token.isNullOrBlank()) stage = Stage.Login else retryConnection()
+    }
+
+    private fun operation(scenario: String, context: String = "", block: suspend () -> Unit) {
+        if (busy) return
+        busy = true
+        error = null
+        viewModelScope.launch {
+            try {
+                block()
+            } catch (exception: CancellationException) {
+                Log.d("BodyPlan", "scenario=$scenario userId=${profile?.userId} $context reason=cancelled", exception)
+                throw exception
+            } catch (exception: Exception) {
+                Log.e("BodyPlan", "scenario=$scenario userId=${profile?.userId} planId=${plan?.id} $context", exception)
+                val unauthorized = (exception is HttpException && exception.code() == 401) ||
+                    (exception is ApiFailure && exception.code in listOf(401, 9005))
+                if (unauthorized) {
+                    clearSession()
+                    error = "登录已失效，请重新登录"
+                } else {
+                    error = failureMessage(exception, scenario)
+                    if (stage == Stage.Booting) stage = Stage.ConnectionError
+                }
+            } finally {
+                busy = false
+            }
         }
     }
 
-    /* ----------------------------- 登录 / 注册 ----------------------------- */
+    private fun failureMessage(exception: Exception, scenario: String): String {
+        if (exception is ApiFailure) return exception.message ?: "服务返回异常"
+        if (exception is HttpException) {
+            try {
+                val payload = Gson().fromJson(exception.response()?.errorBody()?.string(), ApiResponse::class.java)
+                if (!payload?.message.isNullOrBlank()) {
+                    Log.w("BodyPlan", "scenario=$scenario userId=${profile?.userId} code=${payload?.code} reason=${payload?.message}", exception)
+                    return payload!!.message!!
+                }
+            } catch (parseError: Exception) {
+                Log.e("BodyPlan", "scenario=$scenario userId=${profile?.userId} httpStatus=${exception.code()} reason=error-body-invalid", parseError)
+            }
+            return "服务请求失败（${exception.code()}），请稍后重试"
+        }
+        return "请求失败，请检查网络后重试"
+    }
+
+    fun retryConnection() = operation("session-restore") {
+        stage = Stage.Booting
+        loadProfileAndRoute()
+    }
 
     fun login(username: String, password: String) {
         if (username.isBlank() || password.isBlank()) {
             error = "请输入账号和密码"
             return
         }
-        viewModelScope.launch {
-            busy = true
-            error = null
-            try {
-                val response = ApiClient.service.login(LoginRequest(username.trim(), password))
-                val data = response.data
-                if (response.code == 0 && data?.token != null) {
-                    ApiClient.token = data.token
-                    store.token = data.token
-                    displayName = data.user?.nickname ?: data.user?.username ?: username
-                    store.username = displayName
-                    message = "登录成功"
-                    loadProfileAndRoute()
-                } else {
-                    error = response.message ?: "登录失败"
-                }
-            } catch (exception: Exception) {
-                error = networkMessage(exception)
-            } finally {
-                busy = false
-            }
+        operation("login", "username=${username.trim()}") {
+            acceptLogin(api.login(LoginRequest(username.trim(), password)).required())
+            loadProfileAndRoute()
         }
     }
 
@@ -97,230 +129,169 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             error = "账号不能为空，密码至少 6 位"
             return
         }
-        viewModelScope.launch {
-            busy = true
-            error = null
-            try {
-                val response = ApiClient.service.register(
-                    RegisterRequest(
-                        username = username.trim(),
-                        password = password,
-                        nickname = nickname.ifBlank { null },
-                        phone = phone.ifBlank { null },
-                    ),
-                )
-                if (response.code == 0) {
-                    message = "注册成功，正在登录"
-                    val loginResponse = ApiClient.service.login(LoginRequest(username.trim(), password))
-                    val data = loginResponse.data
-                    if (loginResponse.code == 0 && data?.token != null) {
-                        ApiClient.token = data.token
-                        store.token = data.token
-                        displayName = data.user?.nickname ?: data.user?.username ?: username
-                        store.username = displayName
-                        loadProfileAndRoute()
-                    } else {
-                        error = "注册成功，但自动登录失败，请手动登录"
-                        stage = Stage.Login
-                    }
-                } else {
-                    error = response.message ?: "注册失败"
-                }
-            } catch (exception: Exception) {
-                error = networkMessage(exception)
-            } finally {
-                busy = false
-            }
+        operation("register", "username=${username.trim()}") {
+            api.register(RegisterRequest(username.trim(), password, nickname.ifBlank { null }, phone.ifBlank { null })).check()
+            message = "注册成功"
+            acceptLogin(api.login(LoginRequest(username.trim(), password)).required())
+            loadProfileAndRoute()
         }
     }
 
+    private fun acceptLogin(data: AuthResponse) {
+        val token = requireNotNull(data.token) { "登录响应缺少 token" }
+        ApiClient.token = token
+        store.token = token
+        displayName = data.user?.nickname ?: data.user?.username.orEmpty()
+        store.username = displayName
+        stage = Stage.Booting
+    }
+
     fun logout() {
+        if (!busy) clearSession()
+    }
+
+    private fun clearSession() {
         store.clear()
         ApiClient.token = null
         profile = null
+        fitness = null
         plan = null
         today = null
         streak = null
+        calendar = null
+        bodyHistory = emptyList()
+        planHistory = emptyList()
+        checkinHistory = emptyList()
         goalSuggestion = null
+        editingProfile = false
+        loadError = null
+        message = null
         displayName = ""
         stage = Stage.Login
     }
 
-    /* ------------------------------- 建档流程 ------------------------------- */
-
     private suspend fun loadProfileAndRoute() {
+        profile = api.profile().required()
+        val result = api.latestFitnessTest()
+        fitness = if (result.code == 10201) {
+            Log.w("BodyPlan", "scenario=onboarding-resume userId=${profile?.userId} code=${result.code} reason=${result.message}")
+            null
+        } else result.required()
+        editingProfile = false
+        stage = restoredStage(profile, fitness)
+        if (stage == Stage.Ready) {
+            refreshData()
+        }
+    }
+
+    fun loadGoalSuggestion(draft: ProfileSaveRequest) = operation("goal-preview") {
+        goalSuggestion = null
+        goalSuggestion = api.previewGoal(draft).required()
+    }
+
+    fun editProfile() {
+        if (busy) return
+        goalSuggestion = null
+        editingProfile = true
+        stage = Stage.Onboarding
+    }
+
+    fun cancelEdit() {
+        if (busy) return
+        editingProfile = false
+        stage = Stage.Ready
+    }
+
+    fun submitOnboarding(request: ProfileSaveRequest, fitness: FitnessTestRequest) =
+        operation("profile-complete") {
+            plan = api.completeProfile(ProfileCompleteRequest(request, fitness)).required()
+            editingProfile = false
+            stage = Stage.Ready
+            message = "档案、体能测试与新计划已保存"
+            refreshData()
+        }
+
+    fun refreshPlanAndToday() = operation("dashboard-refresh") { refreshData() }
+
+    private suspend fun refreshData() {
+        loadError = null
         try {
-            val response = ApiClient.service.profile()
-            val data = response.data
-            if (response.code == 0) {
-                profile = data
-                if ((data?.profileCompleted ?: 0) == 1) {
-                    stage = Stage.Ready
-                    refreshPlanAndToday()
-                } else {
-                    stage = Stage.Onboarding
-                }
-            } else {
-                error = response.message ?: "读取档案失败"
-                stage = Stage.Login
-            }
+            // 全部读成功后再更新页面，失败保留原快照，并明确标记为未刷新。
+            val newPlan = api.currentPlan().checkedData()
+            val newToday = api.todayTask().required()
+            val newStreak = api.streak().required()
+            val newCalendar = api.calendar(calendarMonth).required()
+            val newProfile = api.profile().required()
+            val newFitness = api.latestFitnessTest().required()
+            val newBodyHistory = api.bodyHistory().required()
+            val newPlanHistory = api.planHistory().required()
+            val newCheckins = api.checkinHistory().required().items
+            plan = newPlan
+            today = newToday
+            streak = newStreak
+            calendar = newCalendar
+            profile = newProfile
+            fitness = newFitness
+            bodyHistory = newBodyHistory
+            planHistory = newPlanHistory
+            checkinHistory = newCheckins
+        } catch (exception: CancellationException) {
+            Log.d("BodyPlan", "scenario=dashboard-refresh userId=${profile?.userId} reason=cancelled", exception)
+            throw exception
         } catch (exception: Exception) {
-            error = networkMessage(exception)
-            stage = Stage.Login
+            Log.e("BodyPlan", "scenario=dashboard-refresh userId=${profile?.userId} planId=${plan?.id}", exception)
+            loadError = "数据刷新失败，当前内容可能不是最新状态"
+            throw exception
         }
     }
 
-    fun loadGoalSuggestion() {
-        viewModelScope.launch {
-            error = null
-            try {
-                val response = ApiClient.service.goalSuggestion()
-                if (response.code == 0) {
-                    goalSuggestion = response.data
-                } else {
-                    error = response.message ?: "获取目标建议失败"
-                }
-            } catch (exception: Exception) {
-                error = networkMessage(exception)
-            }
+    fun changeMonth(offset: Int) = operation("checkin-calendar", "month=$calendarMonth offset=$offset") {
+        val date = Calendar.getInstance().apply {
+            set(Calendar.DAY_OF_MONTH, 1)
+            set(Calendar.YEAR, calendarMonth.substring(0, 4).toInt())
+            set(Calendar.MONTH, calendarMonth.substring(5, 7).toInt() - 1)
+            add(Calendar.MONTH, offset)
         }
+        val requested = monthText(date)
+        val result = api.calendar(requested).required()
+        calendar = result
+        calendarMonth = requested
     }
 
-    /** 建档问卷 + 体能测试一次性提交，随后自动生成训练计划 */
-    fun submitOnboarding(request: ProfileSaveRequest, fitness: FitnessTestRequest) {
-        viewModelScope.launch {
-            busy = true
-            error = null
-            try {
-                val profileResponse = ApiClient.service.saveProfile(request)
-                if (profileResponse.code != 0) {
-                    error = profileResponse.message ?: "保存建档问卷失败"
-                    return@launch
-                }
-                profile = profileResponse.data
+    fun regeneratePlan() = operation("plan-regenerate") {
+        plan = api.generatePlan(PlanGenerateRequest(force = true)).required()
+        message = "已按最新档案重新生成计划"
+        refreshData()
+    }
 
-                val fitnessResponse = ApiClient.service.saveFitnessTest(fitness)
-                if (fitnessResponse.code != 0) {
-                    error = fitnessResponse.message ?: "保存体能测试失败"
-                    return@launch
-                }
-
-                val planResponse = ApiClient.service.generatePlan(PlanGenerateRequest())
-                if (planResponse.code == 0) {
-                    plan = planResponse.data
-                    message = "训练计划已生成"
-                } else {
-                    error = planResponse.message ?: "计划生成失败，可稍后在计划页重试"
-                }
-                stage = Stage.Ready
-                refreshPlanAndToday()
-            } catch (exception: Exception) {
-                error = networkMessage(exception)
-            } finally {
-                busy = false
-            }
+    fun checkin(itemId: Long?, feeling: String, durationMin: Int, remark: String, onSaved: () -> Unit) =
+        operation("checkin-create", "planItemId=$itemId") {
+            api.checkin(CheckinRequest(planItemId = itemId, feeling = feeling,
+                durationMin = durationMin, remark = remark.ifBlank { null })).required()
+            message = "打卡成功"
+            onSaved()
+            refreshData()
         }
+
+    fun cancelCheckin(checkinId: Long) = operation("checkin-cancel", "checkinId=$checkinId") {
+        api.cancelCheckin(checkinId).check()
+        message = "已撤销打卡"
+        refreshData()
     }
 
-    /* ------------------------------- 计划与打卡 ------------------------------- */
+    fun consumeMessage() { message = null }
+    fun consumeError() { error = null }
 
-    fun refreshPlanAndToday() {
-        viewModelScope.launch {
-            busy = true
-            try {
-                val planResponse = ApiClient.service.currentPlan()
-                plan = if (planResponse.code == 0) planResponse.data else null
-
-                val todayResponse = ApiClient.service.todayTask()
-                if (todayResponse.code == 0) {
-                    today = todayResponse.data
-                }
-
-                val streakResponse = ApiClient.service.streak()
-                if (streakResponse.code == 0) {
-                    streak = streakResponse.data
-                }
-            } catch (exception: Exception) {
-                error = networkMessage(exception)
-            } finally {
-                busy = false
-            }
-        }
-    }
-
-    fun regeneratePlan() {
-        viewModelScope.launch {
-            busy = true
-            error = null
-            try {
-                val response = ApiClient.service.generatePlan(PlanGenerateRequest(force = true))
-                if (response.code == 0) {
-                    plan = response.data
-                    message = "已按最新档案重新生成计划"
-                    refreshPlanAndToday()
-                } else {
-                    error = response.message ?: "重新生成计划失败"
-                }
-            } catch (exception: Exception) {
-                error = networkMessage(exception)
-            } finally {
-                busy = false
-            }
-        }
-    }
-
-    fun checkin(itemId: Long, feeling: String, durationMin: Int?) {
-        viewModelScope.launch {
-            busy = true
-            error = null
-            try {
-                val response = ApiClient.service.checkin(
-                    CheckinRequest(planItemId = itemId, feeling = feeling, durationMin = durationMin),
-                )
-                if (response.code == 0) {
-                    message = "打卡成功"
-                    refreshPlanAndToday()
-                } else {
-                    error = response.message ?: "打卡失败"
-                }
-            } catch (exception: Exception) {
-                error = networkMessage(exception)
-            } finally {
-                busy = false
-            }
-        }
-    }
-
-    fun cancelCheckin(checkinId: Long) {
-        viewModelScope.launch {
-            busy = true
-            error = null
-            try {
-                val response = ApiClient.service.cancelCheckin(checkinId)
-                if (response.code == 0) {
-                    message = "已撤销打卡"
-                    refreshPlanAndToday()
-                } else {
-                    error = response.message ?: "撤销打卡失败"
-                }
-            } catch (exception: Exception) {
-                error = networkMessage(exception)
-            } finally {
-                busy = false
-            }
-        }
-    }
-
-    /* -------------------------------- 工具方法 -------------------------------- */
-
-    fun consumeMessage() {
-        message = null
-    }
-
-    fun consumeError() {
-        error = null
-    }
-
-    private fun networkMessage(exception: Exception): String =
-        "网络异常：${exception.message ?: "无法连接后端"}（请确认后端已在 8993 端口启动）"
+    private fun monthText(date: Calendar) = SimpleDateFormat("yyyy-MM", Locale.ROOT).format(date.time)
 }
+
+internal fun restoredStage(profile: ProfileResponse?, fitness: FitnessTestResponse?): Stage =
+    if (profile?.profileCompleted == 1 && fitness != null) Stage.Ready else Stage.Onboarding
+
+internal class ApiFailure(val code: Int?, message: String) : RuntimeException(message)
+
+internal fun <T> ApiResponse<T>.check() {
+    if (code != 0) throw ApiFailure(code, message ?: "服务返回异常（$code）")
+}
+internal fun <T> ApiResponse<T>.checkedData(): T? { check(); return data }
+internal fun <T> ApiResponse<T>.required(): T = checkedData() ?: throw ApiFailure(code, "服务返回的数据不完整")

@@ -6,11 +6,30 @@ import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.PUT
 import retrofit2.http.Path
+import retrofit2.http.Query
 
 /**
  * 后端接口（阶段 1 闭环所需）。路径与 /doc.html 中的接口文档一致。
  */
 interface ApiService {
+
+    @POST("api/v1/profile/complete")
+    suspend fun completeProfile(@Body body: ProfileCompleteRequest): ApiResponse<TrainingPlan>
+
+    @POST("api/v1/profile/goal-suggestion")
+    suspend fun previewGoal(@Body body: ProfileSaveRequest): ApiResponse<GoalSuggestion>
+
+    @GET("api/v1/profile/body-data")
+    suspend fun bodyHistory(@Query("limit") limit: Int = 20): ApiResponse<List<BodyData>>
+
+    @GET("api/v1/plans/history")
+    suspend fun planHistory(): ApiResponse<List<TrainingPlan>>
+
+    @GET("api/v1/checkins/calendar")
+    suspend fun calendar(@Query("month") month: String): ApiResponse<CheckinCalendar>
+
+    @GET("api/v1/checkins")
+    suspend fun checkinHistory(@Query("size") size: Int = 100): ApiResponse<PageResult<CheckinResponse>>
 
     @POST("api/v1/auth/register")
     suspend fun register(@Body body: RegisterRequest): ApiResponse<UserInfo>

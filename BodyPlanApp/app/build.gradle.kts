@@ -3,6 +3,15 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+val bodyPlanApiUrl = providers.gradleProperty("bodyplanApiUrl").getOrElse("http://10.0.2.2:8993/")
+require(Regex("https?://[A-Za-z0-9.:-]+/").matches(bodyPlanApiUrl)) {
+    "bodyplanApiUrl must be an http(s) origin ending with /"
+}
+
+providers.gradleProperty("bodyplanBuildDir").orNull?.let {
+    layout.buildDirectory.set(file(it))
+}
+
 android {
     namespace = "com.maou.bodyplanapp"
     compileSdk {
@@ -16,6 +25,7 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
+        buildConfigField("String", "API_BASE_URL", "\"$bodyPlanApiUrl\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -35,6 +45,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -42,6 +53,7 @@ dependencies {
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.material3)
+    implementation("androidx.compose.material:material-icons-core:1.7.8")
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
@@ -59,4 +71,8 @@ dependencies {
     androidTestImplementation(libs.androidx.junit)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)
+}
+
+tasks.withType<Test>().configureEach {
+    defaultCharacterEncoding = "UTF-8"
 }

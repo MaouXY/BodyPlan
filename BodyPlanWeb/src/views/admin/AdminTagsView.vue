@@ -4,7 +4,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 
 import { createTag, deleteTag, fetchTags, updateTag } from '@/api/admin'
 import type { AdminExerciseTag, TagForm } from '@/types/admin'
-import { TAG_TYPE_LABELS, tagLabelOf } from '@/utils/dict'
+import { TAG_TYPE_LABELS } from '@/utils/dict'
 
 const TAG_TYPES = ['PART', 'SPORT_TYPE', 'SCENE', 'EQUIPMENT', 'DIFFICULTY']
 
@@ -68,8 +68,8 @@ async function handleSave() {
     }
     dialogVisible.value = false
     load()
-  } catch {
-    // 失败提示由拦截器给出
+  } catch (error) {
+    console.error('scenario=tag-save', { tagId: editingId.value, tagCode: form.tagCode }, error instanceof Error ? error.stack : error)
   } finally {
     saving.value = false
   }
@@ -87,8 +87,8 @@ async function handleStatusChange(row: AdminExerciseTag) {
     })
     row.status = nextStatus
     ElMessage.success(nextStatus === 1 ? '标签已启用' : '标签已停用')
-  } catch {
-    // 失败提示由拦截器给出
+  } catch (error) {
+    console.error('scenario=tag-status', { tagId: row.id }, error instanceof Error ? error.stack : error)
   }
 }
 
@@ -99,15 +99,16 @@ async function handleDelete(row: AdminExerciseTag) {
       '删除确认',
       { type: 'warning' },
     )
-  } catch {
+  } catch (error) {
+    console.info('scenario=tag-delete-confirm', { tagId: row.id, reason: error })
     return
   }
   try {
     await deleteTag(row.id)
     ElMessage.success('标签已删除')
     load()
-  } catch {
-    // 失败提示由拦截器给出
+  } catch (error) {
+    console.error('scenario=tag-delete', { tagId: row.id }, error instanceof Error ? error.stack : error)
   }
 }
 
@@ -148,7 +149,7 @@ onMounted(load)
         <el-table-column prop="tagCode" label="编码" min-width="140" />
         <el-table-column label="名称" min-width="140">
           <template #default="{ row }">
-            {{ tagLabelOf(row.tagType, row.tagCode) }}
+            {{ row.tagName }}
           </template>
         </el-table-column>
         <el-table-column prop="sortNo" label="排序" width="90" />

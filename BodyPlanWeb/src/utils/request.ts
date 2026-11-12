@@ -30,12 +30,20 @@ request.interceptors.response.use(
   (response) => {
     const payload = response.data as ApiResponse<unknown>
     if (typeof payload?.code === 'number' && payload.code !== SUCCESS_CODE) {
+      console.error('scenario=api-business-error', {
+        method: response.config.method, url: response.config.url, code: payload.code,
+      }, new Error(payload.message))
       ElMessage.error(payload.message || '请求失败')
       return Promise.reject(payload)
     }
     return payload?.data ?? response.data
   },
   (error) => {
+    // 不记录 config/body/header，避免密码与 token 进入浏览器日志。
+    console.error('scenario=api-request-error', {
+      method: error?.config?.method, url: error?.config?.url, status: error?.response?.status,
+      message: error?.response?.data?.message,
+    }, error?.stack || error?.message || '网络异常')
     const status = error?.response?.status
     if (status === 401) {
       clearToken()

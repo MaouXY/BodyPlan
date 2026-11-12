@@ -20,6 +20,9 @@ import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.stream.Collectors;
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.security.core.context.SecurityContextHolder;
+import com.bodyplan.common.security.CurrentUser;
 
 @Slf4j
 @Hidden
@@ -110,8 +113,12 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     @Hidden
-    public ApiResponse<Void> handleException(Exception exception) {
-        log.error("Unhandled server exception", exception);
+    public ApiResponse<Void> handleException(Exception exception, HttpServletRequest request) {
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+        Object principal = authentication == null ? null : authentication.getPrincipal();
+        Long userId = principal instanceof CurrentUser user ? user.getId() : null;
+        log.error("Unhandled server exception, scenario=http-request, method={}, path={}, userId={}",
+                request.getMethod(), request.getRequestURI(), userId, exception);
         return ApiResponse.fail(ErrorCode.INTERNAL_ERROR);
     }
 

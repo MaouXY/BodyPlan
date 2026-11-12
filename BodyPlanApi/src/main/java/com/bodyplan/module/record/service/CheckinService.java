@@ -201,7 +201,11 @@ public class CheckinService {
 
         boolean hasTaskToday = taskDate.equals(today);
         // 今天不是训练日时，nextTrainingDate 指向本次降级返回的那一天，前端据此提示"下一个训练日"
-        LocalDate nextTrainingDate = hasTaskToday ? null : taskDate;
+        LocalDate nextTrainingDate = taskDate.isAfter(today) ? taskDate : null;
+        if (!hasTaskToday) {
+            log.info("today task uses nearest date, scenario=checkin-today, userId={}, planId={}, today={}, taskDate={}, nextTrainingDate={}",
+                    userId, activePlan.getId(), today, taskDate, nextTrainingDate);
+        }
 
         List<TrainingPlanItem> taskItems = itemsByDate.get(taskDate);
         // 打卡记录按 taskDate 匹配：降级到过去某天时也能把当天的打卡状态带出来
@@ -736,7 +740,8 @@ public class CheckinService {
         try {
             return UserRole.ADMIN == currentUser.getRole();
         } catch (IllegalArgumentException exception) {
-            log.warn("current user role unresolved, scenario=checkin-cancel, roleCode={}", currentUser.getRoleCode());
+            log.warn("current user role unresolved, scenario=checkin-cancel, userId={}, roleCode={}",
+                    currentUser.getId(), currentUser.getRoleCode(), exception);
             return false;
         }
     }

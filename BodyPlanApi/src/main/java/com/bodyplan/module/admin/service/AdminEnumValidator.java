@@ -3,6 +3,7 @@ package com.bodyplan.module.admin.service;
 import com.bodyplan.common.exception.BusinessException;
 import com.bodyplan.common.exception.ErrorCode;
 import org.springframework.util.StringUtils;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.Collection;
 import java.util.List;
@@ -12,6 +13,7 @@ import java.util.Set;
  * 管理端枚举值校验工具。
  * 管理端写入动作 / 标签时集中校验取值，非法值统一抛 BAD_REQUEST 并给出中文提示。
  */
+@Slf4j
 public final class AdminEnumValidator {
 
     /** 目标部位 */
@@ -84,6 +86,7 @@ public final class AdminEnumValidator {
         try {
             validateDifficulty(Integer.valueOf(difficulty.trim()));
         } catch (NumberFormatException exception) {
+            log.warn("invalid difficulty, scenario=admin-exercise-validation, difficulty={}", difficulty, exception);
             throw new BusinessException(ErrorCode.BAD_REQUEST, "难度取值非法，允许值：1/2/3");
         }
     }

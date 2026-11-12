@@ -167,7 +167,10 @@ public class ProfileService {
         CurrentUser currentUser = CurrentUserProvider.require();
         Long userId = currentUser.getId();
 
-        UserProfile profile = createProfileOrRecover(userId);
+        UserProfile profile = findProfile(userId);
+        if (profile == null) {
+            profile = createProfileOrRecover(userId);
+        }
         return buildProfileResponse(userId, profile);
     }
 
@@ -253,6 +256,27 @@ public class ProfileService {
             throw new BusinessException(ErrorCode.PROFILE_NOT_FOUND, "请先完成建档问卷，再获取训练目标建议");
         }
 
+        return goalSuggestion(profile, userId);
+    }
+
+    public GoalSuggestionResponse previewGoal(ProfileSaveRequest request) {
+        Long userId = CurrentUserProvider.require().getId();
+        if (request.heightCm() == null || request.weightKg() == null || request.age() == null) {
+            log.warn("goal preview rejected, scenario=profile-goal-preview, userId={}, reason=missing-body-data", userId);
+            throw new BusinessException(ErrorCode.BODY_DATA_INVALID, "请先填写年龄、身高和体重");
+        }
+        validateBodyValue(request.heightCm(), request.weightKg(), request.age());
+        UserProfile draft = new UserProfile();
+        draft.setUserId(userId);
+        draft.setGender(request.gender());
+        draft.setAge(request.age());
+        draft.setHeightCm(toScale(request.heightCm()));
+        draft.setWeightKg(toScale(request.weightKg()));
+        draft.setBodyType(request.bodyType());
+        return goalSuggestion(draft, userId);
+    }
+
+    private GoalSuggestionResponse goalSuggestion(UserProfile profile, Long userId) {
         BigDecimal bmi = calculateBmi(profile.getHeightCm(), profile.getWeightKg());
         GoalRecommendation recommendation = resolveGoalSuggestion(profile);
         GoalSuggestionResponse response = new GoalSuggestionResponse(
@@ -366,6 +390,8 @@ public class ProfileService {
 
         // 无身体数据（身高体重缺失）时不做 BMI 判断，直接落到日常健身规则
         if (bmi == null) {
+            log.warn("goal suggestion defaulted, scenario=profile-goal-suggestion, userId={}, reason=missing-body-data",
+                    profile.getUserId());
             return new GoalRecommendation(GOAL_DAILY_FITNESS, RULE_DEFAULT_DAILY, "档案中还没有身高体重数据，先按日常健身打基础，补充身高体重后可获得更精准的目标建议。");
         }
 
@@ -585,6 +611,7 @@ public class ProfileService {
             log.info("profile lazily created, scenario=profile-get, userId={}, profileId={}", userId, candidate.getId());
             return candidate;
         } catch (DuplicateKeyException exception) {
+            log.warn("profile insert conflict, scenario=profile-get, userId={}", userId, exception);
             UserProfile created = findProfile(userId);
             if (created != null) {
                 log.warn("profile insert conflicted, scenario=profile-get, userId={}, profileId={}, reason=concurrent-created",
@@ -833,7 +860,8 @@ public class ProfileService {
             try {
                 result.add(Integer.valueOf(part));
             } catch (NumberFormatException exception) {
-                log.warn("weekly days parse skipped, scenario=profile-read, value={}", part);
+                log.warn("weekly days parse skipped, scenario=profile-read, userId={}, value={}",
+                        CurrentUserProvider.require().getId(), part, exception);
             }
         }
         return result;

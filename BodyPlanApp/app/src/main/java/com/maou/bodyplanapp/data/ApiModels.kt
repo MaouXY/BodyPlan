@@ -216,3 +216,9 @@ data class CheckinStreak(
     val maxStreak: Int? = null,
     val totalDays: Int? = null,
 )
+
+data class ProfileCompleteRequest(val profile: ProfileSaveRequest, val fitness: FitnessTestRequest)
+data class CheckinCalendarDay(val date: String, val finishedCount: Int, val checkedIn: Boolean)
+data class CheckinCalendar(val month: String, val days: List<CheckinCalendarDay>, val monthFinishedCount: Int, val activeDays: Int)
+data class PageResult<T>(val items: List<T>, val page: Long, val size: Long, val total: Long)
+data class BodyData(val id: Long, val weightKg: Double?, val bmi: Double?, val score: Int?, val recordedAt: String?)

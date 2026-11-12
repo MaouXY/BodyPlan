@@ -151,7 +151,7 @@ public class TrainingPlanService {
         RecommendLog recommendLog = new RecommendLog();
         recommendLog.setUserId(userId);
         recommendLog.setPlanId(plan.getId());
-        recommendLog.setInputSnapshot(writeJson(recommendation.inputSnapshot()));
+        recommendLog.setInputSnapshot(writeJson(recommendation.inputSnapshot(), userId, plan.getId()));
         recommendLog.setMatchedRule(recommendation.matchedRule());
         recommendLog.setExcludedCount(recommendation.excludedCount());
         recommendLog.setReason(recommendation.reason());
@@ -359,11 +359,12 @@ public class TrainingPlanService {
         return WEEKDAY_LABELS[trainingDate.getDayOfWeek().getValue() - 1];
     }
 
-    private String writeJson(Map<String, Object> snapshot) {
+    private String writeJson(Map<String, Object> snapshot, Long userId, Long planId) {
         try {
             return objectMapper.writeValueAsString(snapshot);
         } catch (JsonProcessingException exception) {
-            log.error("recommend input snapshot json write failed, scenario=plan-recommend-json", exception);
+            log.error("recommend input snapshot json write failed, scenario=plan-recommend-json, userId={}, planId={}",
+                    userId, planId, exception);
             return "{}";
         }
     }

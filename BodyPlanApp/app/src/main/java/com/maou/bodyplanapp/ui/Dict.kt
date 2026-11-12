@@ -85,9 +85,9 @@ private val TRAIN_LIMIT_LABELS = TRAIN_LIMIT_OPTIONS.toMap()
 private val STAIR_LABELS = STAIR_OPTIONS.toMap()
 private val WEEK_DAY_LABELS = WEEK_DAY_OPTIONS.toMap()
 
-fun goalLabel(code: String?) = GOAL_LABELS[code] ?: code ?: "-"
+fun goalLabel(code: String?) = GOAL_LABELS[code] ?: "综合训练"
 
-fun partLabel(code: String?) = PART_LABELS[code] ?: code ?: "-"
+fun partLabel(code: String?) = PART_LABELS[code] ?: "其他部位"
 
 fun sportTypeLabel(code: String?) = SPORT_TYPE_LABELS[code] ?: code ?: "-"
 
@@ -104,10 +104,10 @@ fun stairLabel(code: String?) = STAIR_LABELS[code] ?: code ?: "-"
 fun weekDayLabel(day: Int?) = WEEK_DAY_LABELS[day] ?: "-"
 
 fun levelLabel(code: String?): String = when (code) {
-    "L1" -> "L1 入门"
-    "L2" -> "L2 进阶"
-    "L3" -> "L3 挑战"
-    else -> code ?: "-"
+    "L1" -> "基础入门"
+    "L2" -> "稳步进阶"
+    "L3" -> "高阶挑战"
+    else -> "待评估"
 }
 
 /** 组次描述：力量类是“组数 × 次数”，计时类是“组数 × 秒数” */
@@ -115,10 +115,10 @@ fun planVolumeText(sets: Int?, reps: Int?, durationSec: Int?, restSec: Int?): St
     val setText = sets?.let { "$it 组" } ?: "-"
     val unitText = when {
         reps != null && reps > 0 -> "× $reps 次"
-        durationSec != null && durationSec > 0 -> "× ${durationSec}s"
+        durationSec != null && durationSec > 0 -> "× $durationSec 秒"
         else -> ""
     }
-    val restText = restSec?.takeIf { it > 0 }?.let { "，组间休息 ${it}s" } ?: ""
+    val restText = restSec?.takeIf { it > 0 }?.let { " · 休息 $it 秒" } ?: ""
     return "$setText $unitText$restText".trim()
 }
 

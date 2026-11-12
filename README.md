@@ -3,6 +3,12 @@
 基于 Spring Boot 3.5.8 + Vue 3 + Android（Jetpack Compose）的毕设项目：用户填一份 5 要素建档问卷，
 系统用「三步排除法」从动作库里排出 4 周训练计划，用户按天打卡，管理端看运营数据。
 
+## 演示验收入口（2026-11-12）
+
+详见 [演示验收清单](doc/演示验收清单.md)。本轮已补齐目标建议预览、建档/复测原子提交、
+中断恢复、修改档案、自由打卡、实际训练反馈、月历、身体变化与历史计划、标签名称显示和异常日志。
+现场彩排由使用者按清单执行，不能把编译及单元测试通过等同于三端现场验收通过。
+
 ## 图解导览（建议先看这个）
 
 打开 **`doc/diagrams/index.html`**，里面有六张交互图的目录与阅读顺序：
@@ -23,11 +29,11 @@
 ```
 BodyPlan/
 ├── BodyPlanApi/          Spring Boot 后端（端口 8993）
-│   ├── sql/              建表与种子数据（01~05，按序执行）
+│   ├── sql/              建表与种子数据（01~05），演示验收数据（06）
 │   └── src/main/java/com/bodyplan/
 │       ├── common/       统一响应、异常、JWT、MyBatis-Plus 配置
 │       └── module/       auth / user / profile / fitness / training / record / admin
-├── BodyPlanApp/          Android 用户端（Jetpack Compose，4 个界面）
+├── BodyPlanApp/          Android 用户端（登录、建档、计划、打卡、档案）
 ├── BodyPlanWeb/          Vue 3 管理端（端口 5174，4 个模块）
 └── doc/
     ├── diagrams/         六张交互架构图 + index.html
@@ -45,7 +51,11 @@ mysql -uroot -p < BodyPlanApi/sql/02_schema_training.sql
 mysql -uroot -p < BodyPlanApi/sql/03_schema_record.sql
 mysql -uroot -p < BodyPlanApi/sql/04_seed_data.sql
 mysql -uroot -p < BodyPlanApi/sql/05_schema_exercise_flags.sql
+mysql -uroot -p < BodyPlanApi/sql/06_demo_acceptance_data.sql
 ```
+
+以上 SQL 由使用者执行。已有库且已执行 01~05 时，只执行 06；06 不重置旧账号或已有打卡。
+Windows 可在 MySQL 命令行用 `source` 执行绝对路径，具体命令见验收清单。
 
 **2. 后端**
 
@@ -66,13 +76,24 @@ npm run dev                  # http://127.0.0.1:5174
 
 用 Android Studio 打开 `BodyPlanApp/`，启动模拟器后运行。模拟器通过 `10.0.2.2:8993` 访问宿主机后端。
 
+真机无需改源码，构建时传入电脑局域网地址：
+
+```powershell
+.\gradlew.bat --no-daemon :app:assembleDebug "-PbodyplanApiUrl=http://192.168.1.10:8993/"
+```
+
+将示例 IP 换成电脑实际 IP。后端运行日志位于 `BodyPlanApi/logs/bodyplan-api.log`。
+
 ## 演示账号
 
 | 账号 | 密码 | 角色 |
 | --- | --- | --- |
 | `admin` | `123456` | 管理员（看管理端） |
-| `demo` | `123456` | 普通用户（已建档、有计划） |
-| `demo02` | `123456` | 普通用户（新注册、未建档） |
+| `demo` | `123456` | 原始演示用户，已建档；01~05 不预置计划 |
+| `demo02` | `123456` | 原始对比用户，已建档；01~05 不预置计划 |
+| `demo_ready` | `123456` | 执行 06 后新增：已建档，带 4 周演示计划和近期历史 |
+| `demo_new` | `123456` | 执行 06 后新增：首次未建档，完成演示后不会自动重置 |
+| `demo_compare` | `123456` | 执行 06 后新增：增肌对比档案与身体/打卡历史，无预置计划 |
 
 ## 技术栈
 
@@ -80,7 +101,7 @@ npm run dev                  # http://127.0.0.1:5174
 | --- | --- |
 | 后端 | Spring Boot 3.5.8、MyBatis-Plus、MySQL 8、JWT（jjwt）、Knife4j |
 | 管理端 | Vue 3、TypeScript、Element Plus、ECharts、Pinia、Vite |
-| 用户端 | Kotlin、Jetpack Compose、Retrofit + OkHttp、DataStore |
+| 用户端 | Kotlin、Jetpack Compose、Retrofit + OkHttp、SharedPreferences |
 
 ## 文档
 

@@ -7,6 +7,9 @@ import com.bodyplan.module.profile.dto.GoalSuggestionResponse;
 import com.bodyplan.module.profile.dto.ProfileResponse;
 import com.bodyplan.module.profile.dto.ProfileSaveRequest;
 import com.bodyplan.module.profile.service.ProfileService;
+import com.bodyplan.module.profile.service.ProfileWorkflowService;
+import com.bodyplan.module.profile.dto.ProfileCompleteRequest;
+import com.bodyplan.module.training.dto.TrainingPlanResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -34,6 +37,19 @@ import java.util.List;
 public class ProfileController {
 
     private final ProfileService profileService;
+    private final ProfileWorkflowService profileWorkflowService;
+
+    @PostMapping("/complete")
+    @Operation(summary = "完成建档或复测并生成计划", description = "档案、身体记录、体能测试和计划在同一事务内保存，失败全部回滚")
+    public ApiResponse<TrainingPlanResponse> complete(@Valid @RequestBody ProfileCompleteRequest request) {
+        return ApiResponse.success(profileWorkflowService.complete(request));
+    }
+
+    @PostMapping("/goal-suggestion")
+    @Operation(summary = "预览训练目标建议", description = "按当前表单身体数据计算，不保存档案")
+    public ApiResponse<GoalSuggestionResponse> previewGoal(@Valid @RequestBody ProfileSaveRequest request) {
+        return ApiResponse.success(profileService.previewGoal(request));
+    }
 
     @GetMapping
     @Operation(summary = "查询我的档案", description = "档案不存在时惰性创建默认档案（profileCompleted=0）后返回")

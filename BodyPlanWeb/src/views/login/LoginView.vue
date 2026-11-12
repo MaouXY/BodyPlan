@@ -30,8 +30,8 @@ async function handleLogin() {
         ? route.query.redirect
         : authStore.defaultRoute
     await router.push(redirect)
-  } catch {
-    // 具体错误提示由请求拦截器与 store 给出
+  } catch (error) {
+    console.error('scenario=admin-login', { username: form.username }, error instanceof Error ? error.stack : error)
   } finally {
     submitting.value = false
   }

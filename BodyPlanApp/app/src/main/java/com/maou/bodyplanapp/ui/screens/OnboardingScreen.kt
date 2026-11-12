@@ -1,5 +1,6 @@
 package com.maou.bodyplanapp.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -21,6 +22,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
@@ -53,38 +55,47 @@ private const val TOTAL_STEPS = 5
 
 @Composable
 fun OnboardingScreen(viewModel: AppViewModel) {
+    val saved = viewModel.profile
+    val tested = viewModel.fitness
     var step by remember { mutableIntStateOf(0) }
     var hint by remember { mutableStateOf<String?>(null) }
+    val formScroll = rememberScrollState()
+    LaunchedEffect(step) { formScroll.scrollTo(0); hint = null }
+    BackHandler(enabled = step > 0 || viewModel.editingProfile) {
+        if (!viewModel.busy) {
+            if (step > 0) step -= 1 else viewModel.cancelEdit()
+        }
+    }
 
-    var gender by remember { mutableStateOf("MALE") }
-    var age by remember { mutableStateOf("28") }
-    var height by remember { mutableStateOf("175") }
-    var weight by remember { mutableStateOf("78") }
-    var bodyType by remember { mutableStateOf("APPLE") }
+    var gender by remember { mutableStateOf(saved?.gender?.takeIf { it != "UNKNOWN" } ?: "MALE") }
+    var age by remember { mutableStateOf(saved?.age?.toString() ?: "28") }
+    var height by remember { mutableStateOf(saved?.heightCm?.toString() ?: "175") }
+    var weight by remember { mutableStateOf(saved?.weightKg?.toString() ?: "78") }
+    var bodyType by remember { mutableStateOf(saved?.bodyType ?: "APPLE") }
 
-    var primaryGoal by remember { mutableStateOf("LOSE_FAT") }
-    val subGoals = remember { mutableStateListOf<String>() }
+    var primaryGoal by remember { mutableStateOf(saved?.primaryGoal ?: "LOSE_FAT") }
+    val subGoals = remember { mutableStateListOf<String>().apply { addAll(saved?.subGoals.orEmpty()) } }
 
-    val focusParts = remember { mutableStateListOf("ABDOMEN", "LEG") }
-    val sportTypes = remember { mutableStateListOf("CARDIO", "STRENGTH") }
-    val weeklyDays = remember { mutableStateListOf(1, 3, 5) }
-    var dailyMinutes by remember { mutableStateOf("30") }
-    var remindEnabled by remember { mutableStateOf(true) }
-    var remindTime by remember { mutableStateOf("20:30") }
+    val focusParts = remember { mutableStateListOf<String>().apply { addAll(saved?.focusParts ?: listOf("ABDOMEN", "LEG")) } }
+    val sportTypes = remember { mutableStateListOf<String>().apply { addAll(saved?.sportTypes ?: listOf("CARDIO", "STRENGTH")) } }
+    val weeklyDays = remember { mutableStateListOf<Int>().apply { addAll(saved?.weeklyDays ?: listOf(1, 3, 5)) } }
+    var dailyMinutes by remember { mutableStateOf(saved?.dailyMinutes?.toString() ?: "30") }
+    var remindEnabled by remember { mutableStateOf(saved?.remindEnabled == 1) }
+    var remindTime by remember { mutableStateOf(saved?.remindTime ?: "20:30") }
 
-    val injuries = remember { mutableStateListOf("KNEE") }
-    val trainLimits = remember { mutableStateListOf("DORM", "NO_JUMP", "NO_EQUIPMENT") }
+    val injuries = remember { mutableStateListOf<String>().apply { addAll(saved?.injuries ?: listOf("NONE")) } }
+    val trainLimits = remember { mutableStateListOf<String>().apply { addAll(saved?.trainLimits.orEmpty()) } }
 
-    var pushUp by remember { mutableStateOf("15") }
-    var squat by remember { mutableStateOf("25") }
-    var crunch by remember { mutableStateOf("20") }
-    var stairStatus by remember { mutableStateOf("SLIGHT_HARD") }
+    var pushUp by remember { mutableStateOf(tested?.pushUp?.toString() ?: "") }
+    var squat by remember { mutableStateOf(tested?.squat?.toString() ?: "") }
+    var crunch by remember { mutableStateOf(tested?.crunch?.toString() ?: "") }
+    var stairStatus by remember { mutableStateOf(tested?.stairStatus ?: "HARD") }
 
     fun validateCurrentStep(): String? = when (step) {
         0 -> when {
-            age.toIntOrNull() == null -> "请填写年龄"
-            height.toDoubleOrNull() == null -> "请填写身高"
-            weight.toDoubleOrNull() == null -> "请填写体重"
+            age.toIntOrNull() !in 10..100 -> "年龄应为 10-100 岁"
+            height.toDoubleOrNull()?.let { it.isFinite() && it in 100.0..250.0 } != true -> "身高应为 100 至 250 厘米"
+            weight.toDoubleOrNull()?.let { it.isFinite() && it in 25.0..250.0 } != true -> "体重应为 25 至 250 公斤"
             else -> null
         }
         1 -> if (primaryGoal.isBlank()) "请选择主要训练目标" else null
@@ -96,7 +107,8 @@ fun OnboardingScreen(viewModel: AppViewModel) {
             else -> null
         }
         3 -> null
-        else -> null
+        else -> if (listOf(pushUp, squat, crunch).any { it.isNotBlank() && (it.toIntOrNull()?.let { n -> n in 0..500 } != true) })
+            "体能成绩请填写 0-500 的整数，或留空" else null
     }
 
     fun submit() {
@@ -128,17 +140,17 @@ fun OnboardingScreen(viewModel: AppViewModel) {
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Text(
-            text = "建档问卷（第 ${step + 1} / $TOTAL_STEPS 步）",
-            style = MaterialTheme.typography.titleMedium,
+            text = listOf("认识你的身体", "你想收获什么", "找到训练节奏", "照顾好自己", "了解当前体能")[step],
+            style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.SemiBold,
         )
         Text(
             text = when (step) {
-                0 -> "填写基础身体数据，系统据此计算 BMI"
-                1 -> "系统会根据身体数据推荐目标，也可以自己选"
-                2 -> "选择重点部位、运动偏好与每周可训练时间"
-                3 -> "填写伤病与训练限制，生成计划时会避开这些动作"
-                4 -> "完成简单体能测试，用于确定计划难度等级"
+                0 -> "第 1 步，共 5 步 · 从现在的身体状态开始"
+                1 -> "第 2 步，共 5 步 · 选择最想实现的改变"
+                2 -> "第 3 步，共 5 步 · 把运动融入你的日常"
+                3 -> "第 4 步，共 5 步 · 让训练更适合你"
+                4 -> "最后一步 · 按实际能力填写，不必勉强"
                 else -> ""
             },
             style = MaterialTheme.typography.bodySmall,
@@ -151,7 +163,7 @@ fun OnboardingScreen(viewModel: AppViewModel) {
         )
 
         Column(
-            modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()),
+            modifier = Modifier.weight(1f).verticalScroll(formScroll),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             when (step) {
@@ -169,6 +181,10 @@ fun OnboardingScreen(viewModel: AppViewModel) {
                 )
                 1 -> StepGoal(
                     viewModel = viewModel,
+                    onPreview = {
+                        viewModel.loadGoalSuggestion(ProfileSaveRequest(gender = gender, age = age.toIntOrNull(),
+                            heightCm = height.toDoubleOrNull(), weightKg = weight.toDoubleOrNull(), bodyType = bodyType))
+                    },
                     primaryGoal = primaryGoal,
                     onPrimaryGoalChange = { primaryGoal = it },
                     subGoals = subGoals,
@@ -216,6 +232,9 @@ fun OnboardingScreen(viewModel: AppViewModel) {
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            if (step == 0 && viewModel.editingProfile) {
+                TextButton(onClick = { viewModel.cancelEdit() }, enabled = !viewModel.busy) { Text("取消") }
+            }
             if (step > 0) {
                 TextButton(onClick = { step -= 1 }, enabled = !viewModel.busy) {
                     Text("上一步")
@@ -238,7 +257,7 @@ fun OnboardingScreen(viewModel: AppViewModel) {
                 enabled = !viewModel.busy,
                 modifier = Modifier.weight(1f),
             ) {
-                Text(if (step < TOTAL_STEPS - 1) "下一步" else "提交并生成计划")
+                Text(if (step < TOTAL_STEPS - 1) "继续" else if (viewModel.editingProfile) "保存并更新计划" else "开启我的训练")
             }
         }
     }
@@ -278,14 +297,14 @@ private fun StepBasic(
     bodyType: String,
     onBodyTypeChange: (String) -> Unit,
 ) {
-    SectionCard(title = "基础身体数据", subtitle = "用于计算 BMI 与推荐目标") {
+    SectionCard(title = "基础信息") {
         ChipFlow(GENDER_OPTIONS, setOf(gender), onGenderChange)
         Spacer(modifier = Modifier.height(8.dp))
         NumberField(label = "年龄", value = age, onValueChange = onAgeChange, suffix = "岁")
         Spacer(modifier = Modifier.height(8.dp))
-        NumberField(label = "身高", value = height, onValueChange = onHeightChange, suffix = "cm")
+        NumberField(label = "身高", value = height, onValueChange = onHeightChange, suffix = "厘米")
         Spacer(modifier = Modifier.height(8.dp))
-        NumberField(label = "体重", value = weight, onValueChange = onWeightChange, suffix = "kg")
+        NumberField(label = "体重", value = weight, onValueChange = onWeightChange, suffix = "公斤")
     }
     SectionCard(title = "身体类型") {
         ChipFlow(BODY_TYPE_OPTIONS, setOf(bodyType), onBodyTypeChange)
@@ -295,31 +314,31 @@ private fun StepBasic(
 @Composable
 private fun StepGoal(
     viewModel: AppViewModel,
+    onPreview: () -> Unit,
     primaryGoal: String,
     onPrimaryGoalChange: (String) -> Unit,
     subGoals: List<String>,
     onToggleSubGoal: (String) -> Unit,
 ) {
     SectionCard(
-        title = "训练目标",
-        subtitle = "可以先看系统建议，再结合自己的想法选择",
+        title = "还没想好目标？",
     ) {
         Button(
-            onClick = { viewModel.loadGoalSuggestion() },
+            onClick = onPreview,
             enabled = !viewModel.busy,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text("获取系统目标建议")
+            Text("看看适合我的目标")
         }
         viewModel.goalSuggestion?.let { suggestion ->
             Spacer(modifier = Modifier.height(10.dp))
             Text(
-                text = "建议主目标：${goalLabel(suggestion.recommendedGoal)}（BMI ${suggestion.bmi ?: "-"}，${suggestion.bmiLevel ?: "-"}）",
+                text = "推荐：${goalLabel(suggestion.recommendedGoal)}",
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.SemiBold,
             )
             Text(
-                text = suggestion.reason ?: "",
+                text = "身体指数 ${suggestion.bmi ?: "—"} · 你也可以选择其他目标",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp),
@@ -334,10 +353,10 @@ private fun StepGoal(
             }
         }
     }
-    SectionCard(title = "主要目标（单选）") {
+    SectionCard(title = "最想实现的目标") {
         ChipFlow(GOAL_OPTIONS, setOf(primaryGoal), onPrimaryGoalChange)
     }
-    SectionCard(title = "次要目标（可多选）") {
+    SectionCard(title = "还希望改善哪些方面", subtitle = "可多选") {
         ChipFlow(GOAL_OPTIONS, subGoals.toSet(), onToggleSubGoal)
     }
 }
@@ -354,13 +373,13 @@ private fun StepPreference(
     remindTime: String,
     onRemindTimeChange: (String) -> Unit,
 ) {
-    SectionCard(title = "重点部位（可多选）") {
+    SectionCard(title = "想重点练哪里", subtitle = "可多选") {
         ChipFlow(PART_OPTIONS, focusParts.toSet()) { focusParts.toggleValue(it) }
     }
-    SectionCard(title = "喜欢的运动类型（可多选）") {
+    SectionCard(title = "喜欢哪些运动", subtitle = "可多选") {
         ChipFlow(SPORT_TYPE_OPTIONS, sportTypes.toSet()) { sportTypes.toggleValue(it) }
     }
-    SectionCard(title = "每周训练日（可多选）") {
+    SectionCard(title = "每周哪几天有空") {
         ChipFlow(
             WEEK_DAY_OPTIONS.map { it.first.toString() to it.second },
             weeklyDays.map { it.toString() }.toSet(),
@@ -369,13 +388,13 @@ private fun StepPreference(
     SectionCard(title = "每日运动时长") {
         ChipFlow(DURATION_OPTIONS, setOf(dailyMinutes), onDailyMinutesChange)
     }
-    SectionCard(title = "训练提醒") {
+    SectionCard(title = "习惯几点训练", subtitle = "仅记录偏好，不发送通知") {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("开启训练提醒")
+            Text("记录时间偏好")
             Switch(checked = remindEnabled, onCheckedChange = onRemindEnabledChange)
         }
         if (remindEnabled) {
@@ -383,7 +402,7 @@ private fun StepPreference(
             OutlinedTextField(
                 value = remindTime,
                 onValueChange = onRemindTimeChange,
-                label = { Text("提醒时间（HH:mm）") },
+                label = { Text("训练时间，例如 20:30") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -397,8 +416,8 @@ private fun StepInjury(
     trainLimits: MutableList<String>,
 ) {
     SectionCard(
-        title = "伤病情况（可多选）",
-        subtitle = "生成计划时会排除与伤病冲突的动作",
+        title = "哪些部位需要留意",
+        subtitle = "可多选",
     ) {
         ChipFlow(INJURY_OPTIONS, injuries.toSet()) { code ->
             if (code == "NONE") {
@@ -411,8 +430,8 @@ private fun StepInjury(
         }
     }
     SectionCard(
-        title = "训练限制（可多选）",
-        subtitle = "宿舍、零噪音、不能跳、无器械等限制会直接影响动作筛选",
+        title = "你的训练环境",
+        subtitle = "可多选",
     ) {
         ChipFlow(TRAIN_LIMIT_OPTIONS, trainLimits.toSet()) { trainLimits.toggleValue(it) }
     }
@@ -431,7 +450,7 @@ private fun StepFitness(
 ) {
     SectionCard(
         title = "基础体能测试",
-        subtitle = "三项成绩可留空表示暂时做不了，系统会按固定规则折算 L1/L2/L3 等级",
+        subtitle = "填写一次能完成的数量，暂时做不了可以留空",
     ) {
         NumberField(label = "一次俯卧撑", value = pushUp, onValueChange = onPushUpChange, suffix = "个")
         Spacer(modifier = Modifier.height(8.dp))

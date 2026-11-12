@@ -50,5 +50,10 @@ app:
       expiration-seconds: ${APP_JWT_EXPIRATION_SECONDS:604800}
 
 logging:
+  charset:
+    console: UTF-8
+    file: UTF-8
+  file:
+    name: ${APP_LOG_FILE:logs/bodyplan-api.log}
   level:
     com.bodyplan: info

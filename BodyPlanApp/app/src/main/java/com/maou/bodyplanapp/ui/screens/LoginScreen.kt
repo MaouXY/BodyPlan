@@ -1,133 +1,68 @@
 package com.maou.bodyplanapp.ui.screens
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Favorite
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import com.maou.bodyplanapp.data.ApiClient
 import com.maou.bodyplanapp.ui.AppViewModel
 
 @Composable
 fun LoginScreen(viewModel: AppViewModel) {
-    var mode by remember { mutableIntStateOf(0) }
-    var username by remember { mutableStateOf("demo") }
-    var password by remember { mutableStateOf("123456") }
-    var nickname by remember { mutableStateOf("") }
-    var phone by remember { mutableStateOf("") }
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(24.dp),
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Text(
-            text = "BodyPlan",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold,
-        )
-        Text(
-            text = "个性化健身管理系统 · 移动端",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 4.dp),
-        )
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        TabRow(selectedTabIndex = mode) {
-            Tab(selected = mode == 0, onClick = { mode = 0 }, text = { Text("登录") })
-            Tab(selected = mode == 1, onClick = { mode = 1 }, text = { Text("注册") })
+    var mode by rememberSaveable { mutableIntStateOf(0) }
+    var username by rememberSaveable { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var visible by remember { mutableStateOf(false) }
+    var nickname by rememberSaveable { mutableStateOf("") }
+    var phone by rememberSaveable { mutableStateOf("") }
+    Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(horizontal = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Spacer(Modifier.height(32.dp))
+        Box(Modifier.size(64.dp).background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
+            contentAlignment = Alignment.Center) {
+            Icon(Icons.Outlined.Favorite, null, Modifier.size(32.dp), tint = MaterialTheme.colorScheme.primary)
         }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        OutlinedTextField(
-            value = username,
-            onValueChange = { username = it },
-            label = { Text("账号") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Spacer(modifier = Modifier.height(12.dp))
-        OutlinedTextField(
-            value = password,
-            onValueChange = { password = it },
-            label = { Text("密码") },
-            singleLine = true,
-            visualTransformation = PasswordVisualTransformation(),
-            modifier = Modifier.fillMaxWidth(),
-        )
-
+        Text("律动健身", style = MaterialTheme.typography.headlineLarge)
+        Text("让运动，成为日常。", style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.height(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            FilterChip(selected = mode == 0, onClick = { mode = 0 }, label = { Text("登录") }, enabled = !viewModel.busy)
+            FilterChip(selected = mode == 1, onClick = { mode = 1 }, label = { Text("注册账号") }, enabled = !viewModel.busy)
+        }
+        OutlinedTextField(username, { username = it }, label = { Text("账号") }, singleLine = true,
+            enabled = !viewModel.busy, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(password, { password = it }, label = { Text("密码") }, singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+            visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(),
+            trailingIcon = { TextButton(onClick = { visible = !visible }) { Text(if (visible) "隐藏" else "显示") } },
+            enabled = !viewModel.busy, modifier = Modifier.fillMaxWidth())
         if (mode == 1) {
-            Spacer(modifier = Modifier.height(12.dp))
-            OutlinedTextField(
-                value = nickname,
-                onValueChange = { nickname = it },
-                label = { Text("昵称（可选）") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            OutlinedTextField(
-                value = phone,
-                onValueChange = { phone = it },
-                label = { Text("手机号（可选）") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
+            OutlinedTextField(nickname, { nickname = it }, label = { Text("昵称（选填）") },
+                singleLine = true, enabled = !viewModel.busy, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(phone, { phone = it }, label = { Text("手机号（选填）") }, singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                enabled = !viewModel.busy, modifier = Modifier.fillMaxWidth())
+            Text("密码至少 6 位", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        Button(
-            onClick = {
-                if (mode == 0) {
-                    viewModel.login(username, password)
-                } else {
-                    viewModel.register(username, password, nickname, phone)
-                }
-            },
-            enabled = !viewModel.busy,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(if (mode == 0) "登录" else "注册并登录")
+        Button(onClick = {
+            if (mode == 0) viewModel.login(username, password) else viewModel.register(username, password, nickname, phone)
+        }, enabled = !viewModel.busy && username.isNotBlank() && password.isNotBlank(),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) {
+            Text(if (viewModel.busy) "请稍候…" else if (mode == 0) "登录，开始训练" else "创建账号")
         }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Text(
-            text = "演示账号：demo / 123456（已有建档数据）；注册新账号可完整体验建档问卷与计划生成。",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            text = "后端地址：${ApiClient.BASE_URL}",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 4.dp),
-        )
+        Spacer(Modifier.height(24.dp))
     }
 }

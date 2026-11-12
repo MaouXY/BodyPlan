@@ -82,9 +82,19 @@ public class PlanRecommendationService {
         injuries.remove("NONE");
         Set<String> limits = new LinkedHashSet<>(TagValues.split(profile.getTrainLimits()));
         Set<String> focusParts = new LinkedHashSet<>(TagValues.split(profile.getFocusParts()));
-        List<Integer> weeklyDays = parseWeeklyDays(profile.getWeeklyDays());
+        List<Integer> weeklyDays = parseWeeklyDays(profile.getWeeklyDays(), profile.getUserId());
         int dailyMinutes = profile.getDailyMinutes() == null || profile.getDailyMinutes() <= 0 ? 30 : profile.getDailyMinutes();
         List<String> preferredSports = GOAL_SPORT_PREFERENCE.getOrDefault(goal, DEFAULT_SPORT_PREFERENCE);
+        if (!LEVEL_MAX_DIFFICULTY.containsKey(level) || !StringUtils.hasText(fitnessTest.getLevel())) {
+            log.warn("level defaulted, scenario=plan-recommend, userId={}, testId={}, level={}, maxDifficulty={}",
+                    profile.getUserId(), fitnessTest.getId(), fitnessTest.getLevel(), maxDifficulty);
+        }
+        if (profile.getDailyMinutes() == null || profile.getDailyMinutes() <= 0) {
+            log.warn("duration defaulted, scenario=plan-recommend, userId={}, dailyMinutes={}", profile.getUserId(), dailyMinutes);
+        }
+        if (!GOAL_SPORT_PREFERENCE.containsKey(goal)) {
+            log.warn("sport preference defaulted, scenario=plan-recommend, userId={}, goal={}", profile.getUserId(), goal);
+        }
 
         List<Exercise> all = exerciseMapper.selectList(new LambdaQueryWrapper<Exercise>()
                 .eq(Exercise::getStatus, 1)
@@ -135,6 +145,10 @@ public class PlanRecommendationService {
                 .filter(exercise -> STRETCH_TYPES.contains(exercise.getSportType()))
                 .findFirst()
                 .orElse(null);
+        if (stretchCandidate == null || ordered.size() < actionsPerDay) {
+            log.warn("limited exercise pool, scenario=plan-recommend, userId={}, candidateCount={}, actionsPerDay={}, hasStretch={}",
+                    profile.getUserId(), ordered.size(), actionsPerDay, stretchCandidate != null);
+        }
 
         List<RecommendedDay> days = new ArrayList<>();
         int offset = 0;
@@ -253,12 +267,14 @@ public class PlanRecommendationService {
         return result;
     }
 
-    private List<Integer> parseWeeklyDays(String weeklyDays) {
+    private List<Integer> parseWeeklyDays(String weeklyDays, Long userId) {
         List<Integer> parsed = TagValues.split(weeklyDays).stream()
                 .map(value -> {
                     try {
                         return Integer.parseInt(value);
                     } catch (NumberFormatException exception) {
+                        log.warn("invalid weekly day skipped, scenario=plan-recommend, userId={}, value={}",
+                                userId, value, exception);
                         return null;
                     }
                 })
@@ -266,7 +282,12 @@ public class PlanRecommendationService {
                 .distinct()
                 .sorted()
                 .toList();
-        return parsed.isEmpty() ? DEFAULT_WEEKLY_DAYS : parsed;
+        if (parsed.isEmpty()) {
+            log.warn("weekly days defaulted, scenario=plan-recommend, userId={}, weeklyDays={}, defaultDays={}",
+                    userId, weeklyDays, DEFAULT_WEEKLY_DAYS);
+            return DEFAULT_WEEKLY_DAYS;
+        }
+        return parsed;
     }
 
     private String buildMatchedRule(String goal, String level, Set<String> focusParts) {

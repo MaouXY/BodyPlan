@@ -76,8 +76,8 @@ async function handleStatusChange(row: AdminUserItem) {
     await updateUserStatus(row.id, nextStatus)
     row.status = nextStatus
     ElMessage.success(nextStatus === 1 ? '已启用该账号' : '已禁用该账号')
-  } catch {
-    // 失败提示由拦截器给出
+  } catch (error) {
+    console.error('scenario=user-status', { userId: row.id, status: nextStatus }, error instanceof Error ? error.stack : error)
   }
 }
 
