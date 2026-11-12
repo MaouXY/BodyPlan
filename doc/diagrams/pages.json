@@ -1,0 +1,42 @@
+{
+  "project": "BodyPlan",
+  "tagline": "BodyPlan · 个性化健身管理系统",
+  "commit": "d01b6af",
+  "headline": "六页读完一个<span>完整闭环</span>的健身系统",
+  "lede": "每页回答一个问题：系统长什么样、用户怎么走完一遍、计划凭什么这么推、一次打卡在服务端发生了什么、一条训练项会经历哪些状态、数据落在哪 11 张表里。全部基于仓库真实代码与真实行号。",
+  "facts": ["后端 <b>110</b> 个 Java 类", "Android <b>19</b> 个 Kotlin 文件", "管理端 <b>4</b> 个模块", "数据表 <b>11</b> 张", "计划周期 <b>4</b> 周 / <b>12</b> 个训练日", "端口 <b>8993</b> · <b>5174</b>"],
+  "pages": [
+    { "file": "01-architecture.html", "kind": "01 · ARCHITECTURE", "title": "系统架构总览",
+      "desc": "Android 用户端、Vue 管理端、Spring Boot 后端、MySQL 四层边界；JWT 过滤器如何把请求分派到 7 个业务模块。含「闭环主路径 / 管理端 / 鉴权链」三条引导视图。",
+      "badge": "11 组件 · 3 视图", "accent": "sky" },
+    { "file": "02-workflow-loop.html", "kind": "02 · WORKFLOW", "title": "用户闭环主流程",
+      "desc": "从登录到打卡落库的 11 个节点，横跨用户 / App / 后端 / MySQL 四条泳道，分三个可折叠阶段：建档评估、计划生成、执行打卡。",
+      "badge": "4 泳道 · 11 节点", "accent": "emerald" },
+    { "file": "03-recommend-algorithm.html", "kind": "03 · DATAFLOW", "title": "推荐算法：三步排除法",
+      "desc": "动作库 → ① 伤病禁忌排除 → ② 场地器械过滤 → ③ 体能等级限难度 → 排序装配。每一道闸门都会把淘汰数量写进 recommend_log，用来生成「推荐依据」。",
+      "badge": "5 阶段 · 6 节点", "accent": "violet" },
+    { "file": "04-checkin-sequence.html", "kind": "04 · SEQUENCE", "title": "一次打卡的请求时序",
+      "desc": "App 点「打卡」后，请求穿过 JWT 过滤器、进入 CheckinService，依次做日期校验、重复校验、写 checkin_record、回写明细、重算连续天数。",
+      "badge": "5 参与者 · 10 消息", "accent": "amber" },
+    { "file": "05-plan-lifecycle.html", "kind": "05 · LIFECYCLE", "title": "训练项状态流转",
+      "desc": "表里没有 status 字段，状态是由 training_date 与 checkin_record 推导出来的。图里还画了两条拦截分支：训练日未到（10504）、重复打卡（10502）。",
+      "badge": "2 泳道 · 6 状态", "accent": "rose" },
+    { "file": "06-data-model.html", "kind": "06 · DATA MODEL", "title": "十一张表的分工",
+      "desc": "按「账号建档 / 动作库 / 计划记录」三块分区，连线是真实外键方向。附三处刻意反范式设计的原因（避免 N+1、保证历史可读）。",
+      "badge": "11 表 · 11 关系", "accent": "cyan" }
+  ],
+  "readingOrder": [
+    { "title": "先看骨架 —— 01 架构", "body": "搞清楚有哪几块、谁调谁。记住 Android 和 Vue 都是客户端，真正的业务逻辑全在后端 7 个模块里。" },
+    { "title": "再看动线 —— 02 主流程", "body": "跟着一个用户从注册走到打卡，知道每一步落在哪一层。这一页是后面四页的目录。" },
+    { "title": "然后看脑子 —— 03 推荐算法", "body": "计划不是随机的。三步排除法决定哪些动作能进候选池，这一步是整个项目最有技术含量的地方。" },
+    { "title": "接着看细节 —— 04 打卡时序", "body": "挑最常被问的接口，逐行展开：鉴权、幂等、事务、连续天数重算分别在哪个位置。" },
+    { "title": "补上状态 —— 05 生命周期", "body": "理解「推导状态」而不是「存储状态」这个设计选择，以及两个错误码的触发时机。" },
+    { "title": "最后看落地 —— 06 数据模型", "body": "把前面所有流程对回表结构，看清哪张表被谁写、外键方向如何、哪些字段是冗余的。" }
+  ],
+  "notes": [
+    { "title": "推荐凭什么这么推", "accent": "violet", "items": ["只用建档时采的 5 个字段做决策", "伤病禁忌是硬排除，优先于其他所有规则", "淘汰数量全部记录，前端能展示「为什么没推这个」"] },
+    { "title": "两个错误码的边界", "accent": "rose", "items": ["10504：training_date 在未来，写入前拦截", "10502：同一训练项当天已有记录", "都在落库前抛，不会留脏数据"] },
+    { "title": "为什么状态不落库", "accent": "emerald", "items": ["打卡和计划分属两张表，存状态必然要双写", "双写就有不一致窗口，推导则永远自洽", "代价是查询要多 join 一次，可接受"] },
+    { "title": "从 18 张表砍到 11 张", "accent": "sky", "items": ["建档 7 张合并成 1 张 user_profile", "删除计划模板表，直接用推荐算法生成", "评分并入 body_data，不单开记录表"] }
+  ]
+}

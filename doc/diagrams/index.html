@@ -3,245 +3,92 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>BodyPlan 项目图解 · 六页读懂</title>
+<title>BodyPlan 项目图解 · 6 页读懂</title>
 <style>
   :root {
-    --bg: #0b0f14;
-    --bg-soft: #111820;
-    --line: #1e2936;
-    --line-soft: #17202b;
-    --fg: #e6edf5;
-    --fg-dim: #93a4b8;
-    --fg-mute: #64748b;
-    --accent: #34d399;
-    --accent-2: #38bdf8;
-    --accent-3: #a78bfa;
-    --accent-4: #fbbf24;
-    --accent-5: #fb7185;
-    --accent-6: #22d3ee;
+    --bg: #0b0f14; --bg-soft: #111820;
+    --line: #1e2936; --line-soft: #17202b;
+    --fg: #e6edf5; --fg-dim: #93a4b8; --fg-mute: #64748b;
+    --accent: #34d399; --accent-2: #38bdf8; --accent-3: #a78bfa;
+    --accent-4: #fbbf24; --accent-5: #fb7185; --accent-6: #22d3ee;
     --radius: 16px;
     --font: "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
     --mono: "JetBrains Mono", "Cascadia Code", Consolas, ui-monospace, monospace;
   }
   @media (prefers-color-scheme: light) {
     :root {
-      --bg: #f6f8fb;
-      --bg-soft: #ffffff;
-      --line: #dde5ef;
-      --line-soft: #eaf0f7;
-      --fg: #0f172a;
-      --fg-dim: #475569;
-      --fg-mute: #7b8ca3;
+      --bg: #f6f8fb; --bg-soft: #ffffff;
+      --line: #dde5ef; --line-soft: #eaf0f7;
+      --fg: #0f172a; --fg-dim: #475569; --fg-mute: #7b8ca3;
     }
   }
   * { box-sizing: border-box; }
   html { scroll-behavior: smooth; }
-  body {
-    margin: 0;
-    background: var(--bg);
-    color: var(--fg);
-    font-family: var(--font);
-    line-height: 1.65;
-    -webkit-font-smoothing: antialiased;
-  }
+  body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--font); line-height: 1.65; -webkit-font-smoothing: antialiased; }
   .wrap { max-width: 1180px; margin: 0 auto; padding: 0 28px; }
 
-  /* ---------- header ---------- */
-  header {
-    position: relative;
-    padding: 72px 0 56px;
-    border-bottom: 1px solid var(--line);
-    overflow: hidden;
-  }
+  header { position: relative; padding: 72px 0 56px; border-bottom: 1px solid var(--line); overflow: hidden; }
   header::before {
-    content: "";
-    position: absolute;
-    inset: -40% -10% auto -10%;
-    height: 420px;
+    content: ""; position: absolute; inset: -40% -10% auto -10%; height: 420px;
     background:
       radial-gradient(560px 220px at 18% 40%, rgba(52,211,153,.16), transparent 70%),
       radial-gradient(560px 240px at 78% 20%, rgba(56,189,248,.14), transparent 70%);
-    filter: blur(6px);
-    pointer-events: none;
+    filter: blur(6px); pointer-events: none;
   }
   header > .wrap { position: relative; }
   .kicker {
     display: inline-flex; align-items: center; gap: 8px;
-    font: 600 12px/1 var(--mono);
-    letter-spacing: .12em; text-transform: uppercase;
-    color: var(--accent);
-    padding: 7px 12px;
-    border: 1px solid rgba(52,211,153,.32);
-    border-radius: 999px;
-    background: rgba(52,211,153,.07);
+    font: 600 12px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase;
+    color: var(--accent); padding: 7px 12px;
+    border: 1px solid rgba(52,211,153,.32); border-radius: 999px; background: rgba(52,211,153,.07);
   }
-  h1 {
-    margin: 22px 0 14px;
-    font-size: clamp(30px, 4.4vw, 46px);
-    line-height: 1.18;
-    letter-spacing: -.02em;
-    font-weight: 700;
-  }
-  h1 span {
-    background: linear-gradient(100deg, var(--accent), var(--accent-2) 55%, var(--accent-3));
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-  }
-  .lede {
-    max-width: 660px;
-    font-size: 16.5px;
-    color: var(--fg-dim);
-    margin: 0 0 26px;
-  }
-  .facts {
-    display: flex; flex-wrap: wrap; gap: 10px;
-  }
-  .fact {
-    font: 500 13px/1 var(--mono);
-    color: var(--fg-dim);
-    padding: 9px 13px;
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    background: var(--bg-soft);
-  }
-  .fact b { color: var(--fg); font-weight: 600; }
+  h1 { margin: 22px 0 14px; font-size: clamp(30px, 4.4vw, 46px); line-height: 1.18; letter-spacing: -.02em; font-weight: 700; }
+  h1 span { background: linear-gradient(100deg, var(--accent), var(--accent-2) 55%, var(--accent-3)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .lede { max-width: 660px; font-size: 16.5px; color: var(--fg-dim); margin: 0 0 26px; }
+  .facts { display: flex; flex-wrap: wrap; gap: 10px; }
+  .fact { font: 500 13px/1 var(--mono); color: var(--fg-dim); padding: 9px 13px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg-soft); }
 
-  /* ---------- section ---------- */
   section { padding: 58px 0; }
   .sec-head { margin-bottom: 28px; }
-  .sec-head h2 {
-    margin: 0 0 8px;
-    font-size: 22px;
-    letter-spacing: -.01em;
-  }
+  .sec-head h2 { margin: 0 0 8px; font-size: 22px; letter-spacing: -.01em; }
   .sec-head p { margin: 0; color: var(--fg-dim); font-size: 15px; max-width: 720px; }
 
-  /* ---------- cards ---------- */
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-    gap: 18px;
-  }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 18px; }
   .card {
-    display: flex; flex-direction: column;
-    position: relative;
-    padding: 22px 22px 20px;
-    background: var(--bg-soft);
-    border: 1px solid var(--line);
-    border-radius: var(--radius);
-    text-decoration: none;
-    color: inherit;
+    display: flex; flex-direction: column; position: relative;
+    padding: 22px 22px 20px; background: var(--bg-soft);
+    border: 1px solid var(--line); border-radius: var(--radius);
+    text-decoration: none; color: inherit; overflow: hidden;
     transition: border-color .18s, transform .18s, box-shadow .18s;
-    overflow: hidden;
   }
-  .card::after {
-    content: "";
-    position: absolute; inset: 0 0 auto 0; height: 2px;
-    background: var(--c, var(--accent));
-    opacity: .85;
-  }
-  .card:hover {
-    border-color: color-mix(in srgb, var(--c, var(--accent)) 50%, var(--line));
-    transform: translateY(-2px);
-    box-shadow: 0 14px 34px -18px rgba(0,0,0,.6);
-  }
-  .card:focus-visible {
-    outline: 2px solid var(--c, var(--accent));
-    outline-offset: 3px;
-  }
-  .card .idx {
-    font: 700 12px/1 var(--mono);
-    letter-spacing: .1em;
-    color: var(--c, var(--accent));
-    margin-bottom: 12px;
-  }
-  .card h3 {
-    margin: 0 0 8px;
-    font-size: 17.5px;
-    letter-spacing: -.01em;
-  }
-  .card p {
-    margin: 0 0 16px;
-    font-size: 14px;
-    color: var(--fg-dim);
-    flex: 1;
-  }
-  .card .meta {
-    display: flex; align-items: center; justify-content: space-between;
-    gap: 10px;
-    padding-top: 14px;
-    border-top: 1px solid var(--line-soft);
-    font: 500 12px/1 var(--mono);
-    color: var(--fg-mute);
-  }
-  .card .meta .go {
-    display: inline-flex; align-items: center; gap: 6px;
-    color: var(--c, var(--accent));
-    font-weight: 600;
-  }
+  .card::after { content: ""; position: absolute; inset: 0 0 auto 0; height: 2px; background: var(--c, var(--accent)); opacity: .85; }
+  .card:hover { border-color: color-mix(in srgb, var(--c, var(--accent)) 50%, var(--line)); transform: translateY(-2px); box-shadow: 0 14px 34px -18px rgba(0,0,0,.6); }
+  .card:focus-visible { outline: 2px solid var(--c, var(--accent)); outline-offset: 3px; }
+  .card .idx { font: 700 12px/1 var(--mono); letter-spacing: .1em; color: var(--c, var(--accent)); margin-bottom: 12px; }
+  .card h3 { margin: 0 0 8px; font-size: 17.5px; letter-spacing: -.01em; }
+  .card p { margin: 0 0 16px; font-size: 14px; color: var(--fg-dim); flex: 1; }
+  .card .meta { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-top: 14px; border-top: 1px solid var(--line-soft); font: 500 12px/1 var(--mono); color: var(--fg-mute); }
+  .card .meta .go { display: inline-flex; align-items: center; gap: 6px; color: var(--c, var(--accent)); font-weight: 600; }
   .card:hover .meta .go .arrow { transform: translateX(3px); }
   .arrow { transition: transform .18s; }
 
-  /* ---------- reading order ---------- */
   .order { display: grid; gap: 0; border-left: 1px solid var(--line); margin-left: 10px; }
   .step { position: relative; padding: 0 0 26px 28px; }
   .step:last-child { padding-bottom: 0; }
-  .step::before {
-    content: "";
-    position: absolute; left: -5.5px; top: 8px;
-    width: 10px; height: 10px; border-radius: 50%;
-    background: var(--bg);
-    border: 2px solid var(--c, var(--accent));
-  }
+  .step::before { content: ""; position: absolute; left: -5.5px; top: 8px; width: 10px; height: 10px; border-radius: 50%; background: var(--bg); border: 2px solid var(--c, var(--accent)); }
   .step h4 { margin: 0 0 5px; font-size: 15.5px; }
   .step p { margin: 0; font-size: 14px; color: var(--fg-dim); }
-  .step code {
-    font: 500 12.5px/1 var(--mono);
-    padding: 2px 6px;
-    border-radius: 5px;
-    background: var(--line-soft);
-    color: var(--fg);
-  }
 
-  /* ---------- notes ---------- */
-  .notes {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-    gap: 16px;
-  }
-  .note {
-    padding: 18px 20px;
-    border: 1px solid var(--line);
-    border-radius: 14px;
-    background: var(--bg-soft);
-  }
-  .note h4 {
-    margin: 0 0 8px;
-    font-size: 14px;
-    color: var(--c, var(--accent));
-    letter-spacing: .01em;
-  }
+  .notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+  .note { padding: 18px 20px; border: 1px solid var(--line); border-radius: 14px; background: var(--bg-soft); }
+  .note h4 { margin: 0 0 8px; font-size: 14px; color: var(--c, var(--accent)); letter-spacing: .01em; }
   .note ul { margin: 0; padding-left: 18px; }
   .note li { font-size: 13.5px; color: var(--fg-dim); margin-bottom: 5px; }
   .note li:last-child { margin-bottom: 0; }
-  .note code {
-    font: 500 12px/1 var(--mono);
-    padding: 1px 5px; border-radius: 4px;
-    background: var(--line-soft); color: var(--fg);
-  }
 
-  footer {
-    padding: 34px 0 60px;
-    border-top: 1px solid var(--line);
-    color: var(--fg-mute);
-    font-size: 13px;
-    display: flex; flex-wrap: wrap; gap: 14px; justify-content: space-between;
-  }
-  footer code {
-    font: 500 12px/1 var(--mono);
-    color: var(--fg-dim);
-  }
+  footer { padding: 34px 0 60px; border-top: 1px solid var(--line); color: var(--fg-mute); font-size: 13px; }
+  footer .row { display: flex; flex-wrap: wrap; gap: 14px; justify-content: space-between; }
+  footer code { font: 500 12px/1 var(--mono); color: var(--fg-dim); }
 </style>
 </head>
 <body>
@@ -250,10 +97,7 @@
   <div class="wrap">
     <div class="kicker">BodyPlan · 图解导览</div>
     <h1>六页读完一个<span>完整闭环</span>的健身系统</h1>
-    <p class="lede">
-      每页回答一个问题：系统长什么样、用户怎么走完一遍、计划凭什么这么推、一次打卡在服务端发生了什么、
-      一条训练项会经历哪些状态、数据落在哪 11 张表里。全部基于仓库真实代码与真实行号。
-    </p>
+    <p class="lede">每页回答一个问题：系统长什么样、用户怎么走完一遍、计划凭什么这么推、一次打卡在服务端发生了什么、一条训练项会经历哪些状态、数据落在哪 11 张表里。全部基于仓库真实代码与真实行号。</p>
     <div class="facts">
       <div class="fact">后端 <b>110</b> 个 Java 类</div>
       <div class="fact">Android <b>19</b> 个 Kotlin 文件</div>
@@ -268,11 +112,11 @@
 <section>
   <div class="wrap">
     <div class="sec-head">
-      <h2>六张图</h2>
-      <p>点任意一张进入交互图：可切换引导视图、开启动画走查、切换深色主题，右上角可导出 PNG / SVG。</p>
+      <h2>6 张图</h2>
+      <p>点任意一张进入交互图：可切换引导视图、开启动画走查、切换深浅主题，右上角可导出 PNG / SVG。</p>
     </div>
-
     <div class="grid">
+
       <a class="card" href="01-architecture.html" style="--c: var(--accent-2)">
         <div class="idx">01 · ARCHITECTURE</div>
         <h3>系统架构总览</h3>
@@ -325,26 +169,32 @@
       <p>按这个顺序看，每一页都能用上前一页的信息，不用来回跳。</p>
     </div>
     <div class="order">
+
       <div class="step" style="--c: var(--accent-2)">
         <h4>先看骨架 —— 01 架构</h4>
-        <p>搞清楚有哪几块、谁调谁。记住 <code>Android</code> 和 <code>Vue</code> 都是客户端，真正的业务逻辑全在后端 7 个模块里。</p>
+        <p>搞清楚有哪几块、谁调谁。记住 Android 和 Vue 都是客户端，真正的业务逻辑全在后端 7 个模块里。</p>
       </div>
+
       <div class="step" style="--c: var(--accent)">
         <h4>再看动线 —— 02 主流程</h4>
         <p>跟着一个用户从注册走到打卡，知道每一步落在哪一层。这一页是后面四页的目录。</p>
       </div>
+
       <div class="step" style="--c: var(--accent-3)">
         <h4>然后看脑子 —— 03 推荐算法</h4>
         <p>计划不是随机的。三步排除法决定哪些动作能进候选池，这一步是整个项目最有技术含量的地方。</p>
       </div>
+
       <div class="step" style="--c: var(--accent-4)">
         <h4>接着看细节 —— 04 打卡时序</h4>
         <p>挑最常被问的接口，逐行展开：鉴权、幂等、事务、连续天数重算分别在哪个位置。</p>
       </div>
+
       <div class="step" style="--c: var(--accent-5)">
         <h4>补上状态 —— 05 生命周期</h4>
         <p>理解「推导状态」而不是「存储状态」这个设计选择，以及两个错误码的触发时机。</p>
       </div>
+
       <div class="step" style="--c: var(--accent-6)">
         <h4>最后看落地 —— 06 数据模型</h4>
         <p>把前面所有流程对回表结构，看清哪张表被谁写、外键方向如何、哪些字段是冗余的。</p>
@@ -356,25 +206,28 @@
 <section>
   <div class="wrap">
     <div class="sec-head">
-      <h2>读图时值得留意的四个点</h2>
+      <h2>读图时值得留意的 4 个点</h2>
     </div>
     <div class="notes">
+
       <div class="note" style="--c: var(--accent-3)">
         <h4>推荐凭什么这么推</h4>
         <ul>
-          <li>只用建档时采的 <code>5</code> 个字段做决策</li>
+          <li>只用建档时采的 5 个字段做决策</li>
           <li>伤病禁忌是硬排除，优先于其他所有规则</li>
           <li>淘汰数量全部记录，前端能展示「为什么没推这个」</li>
         </ul>
       </div>
+
       <div class="note" style="--c: var(--accent-5)">
         <h4>两个错误码的边界</h4>
         <ul>
-          <li><code>10504</code>：training_date 在未来，写入前拦截</li>
-          <li><code>10502</code>：同一训练项当天已有记录</li>
+          <li>10504：training_date 在未来，写入前拦截</li>
+          <li>10502：同一训练项当天已有记录</li>
           <li>都在落库前抛，不会留脏数据</li>
         </ul>
       </div>
+
       <div class="note" style="--c: var(--accent)">
         <h4>为什么状态不落库</h4>
         <ul>
@@ -383,12 +236,13 @@
           <li>代价是查询要多 join 一次，可接受</li>
         </ul>
       </div>
+
       <div class="note" style="--c: var(--accent-2)">
         <h4>从 18 张表砍到 11 张</h4>
         <ul>
-          <li>建档 7 张合并成 1 张 <code>user_profile</code></li>
+          <li>建档 7 张合并成 1 张 user_profile</li>
           <li>删除计划模板表，直接用推荐算法生成</li>
-          <li>评分并入 <code>body_data</code>，不单开记录表</li>
+          <li>评分并入 body_data，不单开记录表</li>
         </ul>
       </div>
     </div>
@@ -396,9 +250,11 @@
 </section>
 
 <footer>
-  <div class="wrap" style="display:flex;flex-wrap:wrap;gap:14px;justify-content:space-between;width:100%">
-    <span>BodyPlan · 个性化健身管理系统 · 图解基于提交 <code>d01b6af</code></span>
-    <span>生成工具 <code>archify</code> · 四闸校验通过</span>
+  <div class="wrap">
+    <div class="row">
+      <span>BodyPlan · 个性化健身管理系统 · 图解基于提交 <code>d01b6af</code></span>
+      <span>生成工具 <code>archify</code> · 四闸校验通过</span>
+    </div>
   </div>
 </footer>
 
