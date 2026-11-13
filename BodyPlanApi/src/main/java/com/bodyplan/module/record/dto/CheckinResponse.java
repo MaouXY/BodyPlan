@@ -29,7 +29,9 @@ public record CheckinResponse(
         String feeling,
         String remark,
         @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
-        LocalDateTime createdAt
+        LocalDateTime createdAt,
+        Long exerciseId,
+        String exerciseName
 ) {
 
     /**
@@ -48,7 +50,9 @@ public record CheckinResponse(
                 entity.getDurationMin(),
                 entity.getFeeling(),
                 entity.getRemark(),
-                entity.getCreatedAt()
+                entity.getCreatedAt(),
+                entity.getExerciseId(),
+                entity.getExerciseName()
         );
     }
 }

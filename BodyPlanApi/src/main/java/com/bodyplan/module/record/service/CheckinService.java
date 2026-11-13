@@ -18,6 +18,8 @@ import com.bodyplan.module.record.dto.TodayTaskResponse;
 import com.bodyplan.module.record.entity.CheckinRecord;
 import com.bodyplan.module.record.mapper.CheckinRecordMapper;
 import com.bodyplan.module.training.entity.TrainingPlan;
+import com.bodyplan.module.training.entity.Exercise;
+import com.bodyplan.module.training.mapper.ExerciseMapper;
 import com.bodyplan.module.training.entity.TrainingPlanItem;
 import com.bodyplan.module.training.mapper.TrainingPlanItemMapper;
 import com.bodyplan.module.training.mapper.TrainingPlanMapper;
@@ -101,7 +103,7 @@ public class CheckinService {
      * 同一键最多一行（唯一键保证），ORDER BY 只是防御性写法。
      */
     private static final String SELECT_EXISTING_WITH_ITEM_SQL = """
-            SELECT id, user_id, plan_id, plan_item_id, training_date, finished, duration_min, feeling, remark, created_at, deleted
+            SELECT id, user_id, plan_id, plan_item_id, exercise_id, exercise_name, training_date, finished, duration_min, feeling, remark, created_at, deleted
               FROM checkin_record
              WHERE user_id = ?
                AND training_date = ?
@@ -115,7 +117,7 @@ public class CheckinService {
      * 这个键理论上可能有多行：优先取活记录（deleted ASC），都是撤销记录则取最新一条复活。
      */
     private static final String SELECT_EXISTING_FREE_SQL = """
-            SELECT id, user_id, plan_id, plan_item_id, training_date, finished, duration_min, feeling, remark, created_at, deleted
+            SELECT id, user_id, plan_id, plan_item_id, exercise_id, exercise_name, training_date, finished, duration_min, feeling, remark, created_at, deleted
               FROM checkin_record
              WHERE user_id = ?
                AND training_date = ?
@@ -133,6 +135,8 @@ public class CheckinService {
                    duration_min = ?,
                    feeling = ?,
                    remark = ?,
+                   exercise_id = ?,
+                   exercise_name = ?,
                    created_at = ?
              WHERE id = ?
                AND deleted = 1
@@ -143,6 +147,7 @@ public class CheckinService {
     private final TrainingPlanItemMapper trainingPlanItemMapper;
     /** 只用于绕过 @TableLogic 读/复活已撤销的打卡记录（同一个 DataSource，参与当前事务） */
     private final JdbcTemplate jdbcTemplate;
+    private final ExerciseMapper exerciseMapper;
 
     // ------------------------------------------------------------------
     // 1. 今日任务
@@ -288,6 +293,7 @@ public class CheckinService {
         Long planId = resolvePlanId(userId, safeRequest.planId(), planItem);
         // 日期口径：带明细时一律以明细的 training_date 为准（忽略请求值），只有自由训练才用请求日期
         LocalDate trainingDate = resolveTrainingDate(userId, safeRequest.trainingDate(), planItem);
+        ExerciseSelection exercise = resolveExercise(userId, safeRequest.exerciseId(), planItem);
 
         // 幂等 + 复活：连已撤销（deleted=1）的记录一起查，命中活记录才算重复打卡
         CheckinRecord existing = findCheckinIncludingDeleted(userId, planItemId, trainingDate);
@@ -298,10 +304,10 @@ public class CheckinService {
         }
         if (existing != null) {
             // 命中撤销过的记录：不能 insert（唯一键包含逻辑删除的行），改为复活该行并覆盖本次入参
-            CheckinRecord revived = reviveCheckin(existing, planId, durationMin, feeling, remark);
+            CheckinRecord revived = reviveCheckin(existing, planId, durationMin, feeling, remark, exercise);
             markPlanItemDone(planItem);
-            log.info("checkin revived, scenario=checkin-create, userId={}, checkinId={}, planItemId={}, trainingDate={}",
-                    userId, revived.getId(), planItemId, trainingDate);
+            log.info("checkin revived, scenario=checkin-create, userId={}, checkinId={}, planItemId={}, exerciseId={}, trainingDate={}",
+                    userId, revived.getId(), planItemId, exercise.id(), trainingDate);
             return CheckinResponse.from(revived);
         }
 
@@ -314,6 +320,8 @@ public class CheckinService {
         checkinRecord.setDurationMin(durationMin);
         checkinRecord.setFeeling(feeling);
         checkinRecord.setRemark(remark);
+        checkinRecord.setExerciseId(exercise.id());
+        checkinRecord.setExerciseName(exercise.name());
         // created_at 库里有默认值，但 MyBatis-Plus 不会回填，这里显式赋值以便直接返回给前端
         checkinRecord.setCreatedAt(LocalDateTime.now());
 
@@ -329,14 +337,27 @@ public class CheckinService {
         // 打卡成功：把计划明细置为已完成（同一事务，失败一起回滚）
         markPlanItemDone(planItem);
 
-        log.info("checkin created, scenario=checkin-create, userId={}, planItemId={}, trainingDate={}",
-                userId, planItemId, trainingDate);
+        log.info("checkin created, scenario=checkin-create, userId={}, checkinId={}, planItemId={}, exerciseId={}, trainingDate={}",
+                userId, checkinRecord.getId(), planItemId, exercise.id(), trainingDate);
         return CheckinResponse.from(checkinRecord);
     }
 
     // ------------------------------------------------------------------
     // 3. 撤销打卡
     // ------------------------------------------------------------------
+
+    @Transactional(rollbackFor = Exception.class)
+    public CheckinResponse createFree(CheckinSaveRequest request) {
+        Long userId = CurrentUserProvider.require().getId();
+        if (request == null || request.exerciseId() == null || request.planItemId() != null
+                || request.durationMin() == null || request.durationMin() < 1 || request.durationMin() > 300) {
+            log.warn("free checkin invalid, scenario=checkin-free-create, userId={}, exerciseId={}, planItemId={}, durationMin={}",
+                    userId, request == null ? null : request.exerciseId(), request == null ? null : request.planItemId(),
+                    request == null ? null : request.durationMin());
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "请选择具体运动并填写 1 至 300 分钟的时长");
+        }
+        return create(request);
+    }
 
     /**
      * 撤销打卡。事务内：逻辑删除打卡记录 + 把对应明细状态回置 PENDING。
@@ -648,7 +669,7 @@ public class CheckinService {
      * feeling / remark，created_at 刷新为当前时间。加 {@code AND deleted = 1} 做 CAS，
      * 并发下被别的请求先复活时返回 0 行，此时按"已存在打卡"处理，避免返回一条不属于本次操作的记录。
      */
-    private CheckinRecord reviveCheckin(CheckinRecord existing, Long planId, Integer durationMin, String feeling, String remark) {
+    private CheckinRecord reviveCheckin(CheckinRecord existing, Long planId, Integer durationMin, String feeling, String remark, ExerciseSelection exercise) {
         LocalDateTime createdAt = LocalDateTime.now();
         int updated = jdbcTemplate.update(
                 REVIVE_CHECKIN_SQL,
@@ -656,6 +677,8 @@ public class CheckinService {
                 durationMin,
                 feeling,
                 remark,
+                exercise.id(),
+                exercise.name(),
                 Timestamp.valueOf(createdAt),
                 existing.getId());
         if (updated != 1) {
@@ -668,6 +691,8 @@ public class CheckinService {
         existing.setDurationMin(durationMin);
         existing.setFeeling(feeling);
         existing.setRemark(remark);
+        existing.setExerciseId(exercise.id());
+        existing.setExerciseName(exercise.name());
         existing.setCreatedAt(createdAt);
         existing.setFinished(FINISHED_YES);
         existing.setDeleted(0);
@@ -683,6 +708,9 @@ public class CheckinService {
         record.setPlanId(rs.wasNull() ? null : planId);
         long planItemId = rs.getLong("plan_item_id");
         record.setPlanItemId(rs.wasNull() ? null : planItemId);
+        long exerciseId = rs.getLong("exercise_id");
+        record.setExerciseId(rs.wasNull() ? null : exerciseId);
+        record.setExerciseName(rs.getString("exercise_name"));
         Date trainingDate = rs.getDate("training_date");
         record.setTrainingDate(trainingDate == null ? null : trainingDate.toLocalDate());
         record.setFinished(rs.getInt("finished"));
@@ -694,6 +722,29 @@ public class CheckinService {
         record.setCreatedAt(createdAt == null ? null : createdAt.toLocalDateTime());
         record.setDeleted(rs.getInt("deleted"));
         return record;
+    }
+
+    private record ExerciseSelection(Long id, String name) {}
+
+    private ExerciseSelection resolveExercise(Long userId, Long exerciseId, TrainingPlanItem planItem) {
+        if (planItem != null) {
+            if (exerciseId != null && !Objects.equals(exerciseId, planItem.getExerciseId())) {
+                log.warn("checkin exercise mismatch, scenario=checkin-create, userId={}, planItemId={}, exerciseId={}",
+                        userId, planItem.getId(), exerciseId);
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "所选运动与计划动作不一致");
+            }
+            return new ExerciseSelection(planItem.getExerciseId(), planItem.getExerciseName());
+        }
+        if (exerciseId == null) {
+            log.warn("legacy free checkin has no exercise, scenario=checkin-create, userId={}, reason=legacy-client", userId);
+            return new ExerciseSelection(null, null);
+        }
+        Exercise exercise = exerciseMapper.selectById(exerciseId);
+        if (exercise == null || !Integer.valueOf(1).equals(exercise.getStatus())) {
+            log.warn("free exercise unavailable, scenario=checkin-create, userId={}, exerciseId={}", userId, exerciseId);
+            throw new BusinessException(ErrorCode.EXERCISE_NOT_FOUND, "运动不存在或已下架，请重新选择");
+        }
+        return new ExerciseSelection(exercise.getId(), exercise.getName());
     }
 
     /** 该记录是否已被逻辑删除（撤销） */

@@ -46,6 +46,12 @@ public class CheckinController {
         return ApiResponse.success(checkinService.create(request));
     }
 
+    @PostMapping("/free")
+    @Operation(summary = "记录自选运动", description = "必须选择已上架运动，保存运动名称快照；仍沿用每天一次自由训练的规则")
+    public ApiResponse<CheckinResponse> createFree(@RequestBody CheckinSaveRequest request) {
+        return ApiResponse.success(checkinService.createFree(request));
+    }
+
     @DeleteMapping("/{id}")
     @Operation(summary = "撤销打卡", description = "逻辑删除打卡记录并把明细状态回置 PENDING；非 ADMIN 只能撤销自己的记录")
     public ApiResponse<Void> cancel(

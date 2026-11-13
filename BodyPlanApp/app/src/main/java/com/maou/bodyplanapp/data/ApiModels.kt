@@ -197,6 +197,7 @@ data class CheckinRequest(
     val durationMin: Int? = null,
     val feeling: String? = null,
     val remark: String? = null,
+    val exerciseId: Long? = null,
 )
 
 data class CheckinResponse(
@@ -209,6 +210,18 @@ data class CheckinResponse(
     val feeling: String? = null,
     val remark: String? = null,
     val createdAt: String? = null,
+    val exerciseId: Long? = null,
+    val exerciseName: String? = null,
+)
+
+data class ExerciseOption(
+    val id: Long,
+    val name: String,
+    val part: String? = null,
+    val sportType: String? = null,
+    val cautions: String? = null,
+    val keyPoints: String? = null,
+    val status: Int? = null,
 )
 
 data class CheckinStreak(

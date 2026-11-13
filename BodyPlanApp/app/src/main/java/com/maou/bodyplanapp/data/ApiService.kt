@@ -13,6 +13,13 @@ import retrofit2.http.Query
  */
 interface ApiService {
 
+    @GET("api/v1/exercises")
+    suspend fun exercises(@Query("page") page: Long = 1, @Query("size") size: Int = 30,
+        @Query("keyword") keyword: String? = null): ApiResponse<PageResult<ExerciseOption>>
+
+    @POST("api/v1/checkins/free")
+    suspend fun freeCheckin(@Body body: CheckinRequest): ApiResponse<CheckinResponse>
+
     @POST("api/v1/profile/complete")
     suspend fun completeProfile(@Body body: ProfileCompleteRequest): ApiResponse<TrainingPlan>
 

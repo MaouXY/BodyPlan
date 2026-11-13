@@ -32,10 +32,20 @@ class DemoFlowTest {
     }
 
     @Test fun freeTrainingSendsActualFeedbackWithoutItemOrWholeSessionDuration() {
-        val json = Gson().toJsonTree(CheckinRequest(durationMin = 8, feeling = "HARD", remark = "实际训练反馈")).asJsonObject
+        val json = Gson().toJsonTree(CheckinRequest(durationMin = 8, feeling = "HARD", remark = "实际训练反馈", exerciseId = 7)).asJsonObject
         assertFalse(json.has("planItemId"))
         assertEquals(8, json["durationMin"].asInt)
         assertEquals("HARD", json["feeling"].asString)
         assertEquals("实际训练反馈", json["remark"].asString)
+        assertEquals(7L, json["exerciseId"].asLong)
+    }
+
+    @Test fun historyDecodesExerciseSnapshotAndLegacyRowsRemainReadable() {
+        val record = Gson().fromJson("""{"id":9,"exerciseId":7,"exerciseName":"慢跑"}""", CheckinResponse::class.java)
+        assertEquals("慢跑", record.exerciseName)
+        assertEquals(7L, record.exerciseId)
+        val legacy = Gson().fromJson("""{"id":2,"remark":"旧记录"}""", CheckinResponse::class.java)
+        assertNull(legacy.exerciseName)
+        assertEquals("旧记录", legacy.remark)
     }
 }

@@ -7,6 +7,8 @@ import com.bodyplan.module.record.dto.CheckinSaveRequest;
 import com.bodyplan.module.record.entity.CheckinRecord;
 import com.bodyplan.module.record.mapper.CheckinRecordMapper;
 import com.bodyplan.module.training.entity.TrainingPlan;
+import com.bodyplan.module.training.entity.Exercise;
+import com.bodyplan.module.training.mapper.ExerciseMapper;
 import com.bodyplan.module.training.entity.TrainingPlanItem;
 import com.bodyplan.module.training.mapper.TrainingPlanItemMapper;
 import com.bodyplan.module.training.mapper.TrainingPlanMapper;
@@ -28,7 +30,8 @@ class CheckinDemoTest {
     private final TrainingPlanMapper plans = mock(TrainingPlanMapper.class);
     private final TrainingPlanItemMapper items = mock(TrainingPlanItemMapper.class);
     private final JdbcTemplate jdbc = mock(JdbcTemplate.class);
-    private final CheckinService service = new CheckinService(records, plans, items, jdbc);
+    private final ExerciseMapper exercises = mock(ExerciseMapper.class);
+    private final CheckinService service = new CheckinService(records, plans, items, jdbc, exercises);
 
     @BeforeEach
     void authenticate() {
@@ -94,5 +97,87 @@ class CheckinDemoTest {
         var result = service.todayTask();
         assertFalse(result.hasTaskToday());
         assertNull(result.nextTrainingDate());
+    }
+
+    @Test
+    void freeExerciseIsValidatedAndNameIsSnapshotted() {
+        availableExercise(7L, "慢跑");
+        var result = service.createFree(new CheckinSaveRequest(null, null, null, 12, "NORMAL", "户外", 7L));
+        assertEquals(7L, result.exerciseId());
+        assertEquals("慢跑", result.exerciseName());
+        assertEquals("户外", result.remark());
+        assertNull(result.planItemId());
+        verify(records).insert(argThat((CheckinRecord row) -> row.getExerciseId().equals(7L)
+                && row.getExerciseName().equals("慢跑")));
+    }
+
+    @Test
+    void freeExerciseMustBeSelectedAndDurationMustBeValid() {
+        assertThrows(BusinessException.class, () -> service.createFree(
+                new CheckinSaveRequest(null, null, null, 12, "NORMAL", null)));
+        assertThrows(BusinessException.class, () -> service.createFree(
+                new CheckinSaveRequest(null, null, null, 0, "NORMAL", null, 7L)));
+        assertThrows(BusinessException.class, () -> service.createFree(
+                new CheckinSaveRequest(99L, null, null, 12, "NORMAL", null, 7L)));
+        verifyNoInteractions(records, exercises);
+    }
+
+    @Test
+    void unavailableExerciseCannotBeRecorded() {
+        var hidden = availableExercise(7L, "慢跑");
+        hidden.setStatus(0);
+        var failure = assertThrows(BusinessException.class, () -> service.createFree(
+                new CheckinSaveRequest(null, null, null, 12, "NORMAL", null, 7L)));
+        assertEquals(ErrorCode.EXERCISE_NOT_FOUND, failure.getErrorCode());
+        verify(records, never()).insert(any(CheckinRecord.class));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void revivedFreeRecordReplacesOldExerciseSnapshot() {
+        availableExercise(7L, "慢跑");
+        var old = new CheckinRecord();
+        old.setId(9L);
+        old.setDeleted(1);
+        old.setExerciseId(2L);
+        old.setExerciseName("卷腹");
+        when(jdbc.query(anyString(), any(RowMapper.class), any(Object[].class))).thenReturn(List.of(old));
+        when(jdbc.update(anyString(), any(Object[].class))).thenReturn(1);
+        var result = service.createFree(new CheckinSaveRequest(null, null, null, 12, "NORMAL", null, 7L));
+        assertEquals(7L, result.exerciseId());
+        assertEquals("慢跑", result.exerciseName());
+        verify(jdbc).update(contains("exercise_id = ?"), nullable(Long.class), eq(12), eq("NORMAL"),
+                isNull(), eq(7L), eq("慢跑"), any(java.sql.Timestamp.class), eq(9L));
+        verify(records, never()).insert(any(CheckinRecord.class));
+    }
+
+    @Test
+    void planCheckinUsesPlanSnapshotInsteadOfMutableCatalogName() {
+        var plan = new TrainingPlan();
+        plan.setId(100L);
+        plan.setUserId(42L);
+        var item = new TrainingPlanItem();
+        item.setId(200L);
+        item.setPlanId(100L);
+        item.setExerciseId(7L);
+        item.setExerciseName("计划动作快照");
+        item.setTrainingDate(LocalDate.now());
+        when(items.selectById(200L)).thenReturn(item);
+        when(plans.selectById(100L)).thenReturn(plan);
+        var result = service.create(new CheckinSaveRequest(200L, null, null, 8, "NORMAL", null));
+        assertEquals("计划动作快照", result.exerciseName());
+        assertEquals(7L, result.exerciseId());
+        verifyNoInteractions(exercises);
+        assertThrows(BusinessException.class, () -> service.create(
+                new CheckinSaveRequest(200L, null, null, 8, "NORMAL", null, 99L)));
+    }
+
+    private Exercise availableExercise(Long id, String name) {
+        var exercise = new Exercise();
+        exercise.setId(id);
+        exercise.setName(name);
+        exercise.setStatus(1);
+        when(exercises.selectById(id)).thenReturn(exercise);
+        return exercise;
     }
 }

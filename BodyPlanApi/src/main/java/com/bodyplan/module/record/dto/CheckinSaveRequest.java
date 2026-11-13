@@ -3,7 +3,7 @@ package com.bodyplan.module.record.dto;
 /**
  * 打卡请求体。
  *
- * <p>所有字段都可空：App 首次进入或自由训练时只提交 {@code trainingDate} 甚至空对象即可。</p>
+ * <p>旧打卡接口保留可空字段兼容；新自选运动接口要求 exerciseId 与 1~300 分钟时长。</p>
  *
  * <p>训练日期与感受这里用 String 接收而不是 LocalDate，是为了把「格式错误」在 Service 里
  * 转成带中文提示的 BAD_REQUEST，避免 Jackson 反序列化失败被全局异常处理器统一成「请求体格式错误」。</p>
@@ -15,6 +15,7 @@ package com.bodyplan.module.record.dto;
  * @param durationMin  本次训练时长（分钟），可空且不能为负数
  * @param feeling      训练感受：EASY / NORMAL / HARD，可空
  * @param remark       备注，可空且长度不超过 255
+ * @param exerciseId   自选运动ID；计划打卡由计划明细确定，不接受替换成其他动作
  */
 public record CheckinSaveRequest(
         Long planItemId,
@@ -22,6 +23,12 @@ public record CheckinSaveRequest(
         String trainingDate,
         Integer durationMin,
         String feeling,
-        String remark
+        String remark,
+        Long exerciseId
 ) {
+    /** 兼容原有计划打卡调用；自由运动选择使用 exerciseId。 */
+    public CheckinSaveRequest(Long planItemId, Long planId, String trainingDate,
+                              Integer durationMin, String feeling, String remark) {
+        this(planItemId, planId, trainingDate, durationMin, feeling, remark, null);
+    }
 }

@@ -146,9 +146,10 @@ fun TodayScreen(viewModel: AppViewModel, onOpenPlan: () -> Unit = {}) {
                 HorizontalDivider(Modifier.padding(vertical = 6.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                Text("${shortDate(record.trainingDate)} · ${if (record.planItemId == null) "自由训练" else "计划训练"}",
+                Text(record.exerciseName?.takeIf { it.isNotBlank() }
+                    ?: if (record.planItemId == null) "自由训练" else "计划训练",
                     style = MaterialTheme.typography.titleSmall)
-                Text("${record.durationMin ?: 0} 分钟 · ${feelingLabel(record.feeling)}",
+                Text("${shortDate(record.trainingDate)} · ${record.durationMin ?: 0} 分钟 · ${feelingLabel(record.feeling)}",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (!record.remark.isNullOrBlank()) Text(record.remark, style = MaterialTheme.typography.bodySmall)
                 }
@@ -176,25 +177,48 @@ fun TodayScreen(viewModel: AppViewModel, onOpenPlan: () -> Unit = {}) {
         title = selectedName,
         busy = viewModel.busy,
         error = viewModel.error,
+        isFree = selectedItem == null,
+        loadExercises = viewModel::searchExercises,
+        userId = viewModel.profile?.userId,
         onDismiss = { if (!viewModel.busy) showFeedback = false },
-        onSubmit = { minutes, feeling, remark ->
-            viewModel.checkin(selectedItem, feeling, minutes, remark) { showFeedback = false }
+        onSubmit = { minutes, feeling, remark, exerciseId ->
+            viewModel.checkin(selectedItem, feeling, minutes, remark, exerciseId) { showFeedback = false }
         },
     )
 }
 
 @Composable
-private fun FeedbackDialog(title: String, busy: Boolean, error: String?, onDismiss: () -> Unit, onSubmit: (Int, String, String) -> Unit) {
+internal fun FeedbackDialog(title: String, busy: Boolean, error: String?, isFree: Boolean,
+    loadExercises: suspend (Long, String) -> com.maou.bodyplanapp.data.PageResult<com.maou.bodyplanapp.data.ExerciseOption>,
+    userId: Long? = null, onDismiss: () -> Unit, onSubmit: (Int, String, String, Long?) -> Unit) {
     var minutes by remember { mutableStateOf("") }
     var feeling by remember { mutableStateOf("NORMAL") }
     var remark by remember { mutableStateOf("") }
-    val valid = minutes.toIntOrNull()?.let { it in 1..300 } == true && remark.length <= 255
+    var selectedExercise by remember { mutableStateOf<com.maou.bodyplanapp.data.ExerciseOption?>(null) }
+    var choosingExercise by remember { mutableStateOf(isFree) }
+    val valid = minutes.toIntOrNull()?.let { it in 1..300 } == true && remark.length <= 255 &&
+        (!isFree || selectedExercise != null)
+    if (choosingExercise) {
+        ExercisePickerDialog(loadExercises = loadExercises, userId = userId,
+            onDismiss = { choosingExercise = false },
+            onSelect = { selectedExercise = it; choosingExercise = false })
+        return
+    }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                if (isFree) {
+                    OutlinedButton(onClick = { choosingExercise = true }, enabled = !busy,
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                        Text(selectedExercise?.name?.let { "$it · 更换" } ?: "选择运动")
+                    }
+                    selectedExercise?.cautions?.takeIf { it.isNotBlank() }?.let {
+                        Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
                 NumberField("训练了多久", minutes, { minutes = it }, suffix = "分钟")
                 Text("记录 1 至 300 分钟", style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -210,7 +234,8 @@ private fun FeedbackDialog(title: String, busy: Boolean, error: String?, onDismi
             }
         },
         confirmButton = {
-            TextButton(onClick = { onSubmit(minutes.toInt(), feeling, remark) }, enabled = !busy && valid) { Text("确认打卡") }
+            TextButton(onClick = { onSubmit(minutes.toInt(), feeling, remark, selectedExercise?.id) },
+                enabled = !busy && valid) { Text("确认打卡") }
         },
         dismissButton = { TextButton(onClick = onDismiss, enabled = !busy) { Text("取消") } },
     )

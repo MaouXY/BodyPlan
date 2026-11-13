@@ -20,6 +20,8 @@ public class CheckinRecord {
     private Long userId;
     private Long planId;
     private Long planItemId;
+    private Long exerciseId;
+    private String exerciseName;
     private LocalDate trainingDate;
     private Integer finished;
     private Integer durationMin;

@@ -89,7 +89,7 @@ fun goalLabel(code: String?) = GOAL_LABELS[code] ?: "综合训练"
 
 fun partLabel(code: String?) = PART_LABELS[code] ?: "其他部位"
 
-fun sportTypeLabel(code: String?) = SPORT_TYPE_LABELS[code] ?: code ?: "-"
+fun sportTypeLabel(code: String?) = SPORT_TYPE_LABELS[code] ?: "综合运动"
 
 fun bodyTypeLabel(code: String?) = BODY_TYPE_LABELS[code] ?: code ?: "-"
 

@@ -94,6 +94,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private fun failureMessage(exception: Exception, scenario: String): String {
         if (exception is ApiFailure) return exception.message ?: "服务返回异常"
         if (exception is HttpException) {
+            if (scenario == "free-checkin-create" && exception.code() == 404) {
+                return "服务尚未支持自选运动，请先升级后端后再打卡"
+            }
             try {
                 val payload = Gson().fromJson(exception.response()?.errorBody()?.string(), ApiResponse::class.java)
                 if (!payload?.message.isNullOrBlank()) {
@@ -264,10 +267,19 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         refreshData()
     }
 
-    fun checkin(itemId: Long?, feeling: String, durationMin: Int, remark: String, onSaved: () -> Unit) =
-        operation("checkin-create", "planItemId=$itemId") {
-            api.checkin(CheckinRequest(planItemId = itemId, feeling = feeling,
-                durationMin = durationMin, remark = remark.ifBlank { null })).required()
+    suspend fun searchExercises(page: Long, keyword: String): PageResult<ExerciseOption> =
+        api.exercises(page = page, keyword = keyword.trim().ifBlank { null }).required()
+
+    fun checkin(itemId: Long?, feeling: String, durationMin: Int, remark: String,
+        exerciseId: Long? = null, onSaved: () -> Unit) =
+        operation(if (itemId == null) "free-checkin-create" else "checkin-create", "planItemId=$itemId exerciseId=$exerciseId") {
+            val request = CheckinRequest(planItemId = itemId, feeling = feeling,
+                durationMin = durationMin, remark = remark.ifBlank { null }, exerciseId = exerciseId)
+            val result = if (itemId == null) {
+                requireNotNull(exerciseId) { "请选择具体运动" }
+                api.freeCheckin(request).required()
+            } else api.checkin(request).required()
+            check(result.id != null) { "打卡响应缺少记录编号" }
             message = "打卡成功"
             onSaved()
             refreshData()
