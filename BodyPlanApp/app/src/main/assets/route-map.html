@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<style>/* LEAFLET_CSS */</style>
+<style>
+html,body{padding:0;margin:0;background:#e9efeb}
+#map{position:fixed;top:0;left:0}
+.leaflet-container{font-family:system-ui,sans-serif}
+.leaflet-control-attribution{font-size:10px}
+#status{position:absolute;z-index:600;top:12px;left:50%;transform:translateX(-50%);background:#fff;color:#3c5247;padding:7px 12px;border-radius:6px;font-size:12px;white-space:nowrap;box-shadow:0 1px 4px #0002;pointer-events:none}
+</style>
+</head>
+<body><div id="map"></div><div id="status">等待定位</div>
+<script>/* LEAFLET_JS */</script>
+<script>
+// WebView can resolve viewport CSS units before Compose measures its native view.
+const container=document.getElementById('map');
+function sizeContainer(){
+  container.style.width=window.innerWidth+'px';
+  container.style.height=window.innerHeight+'px';
+}
+sizeContainer();
+const map=L.map('map',{zoomControl:true}).setView([35,105],4);
+function resizeMap(){sizeContainer();map.invalidateSize({animate:false});}
+let tileFailed=false;
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{
+  maxZoom:19,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+}).on('tileerror',()=>{tileFailed=true;document.getElementById('status').textContent='底图暂不可用，轨迹仍会保存';document.getElementById('status').hidden=false})
+  .on('tileload',()=>{tileFailed=false;document.getElementById('status').textContent='等待定位';document.getElementById('status').hidden=all.length>0}).addTo(map);
+let routeKey=null,lines=[],start=null,end=null,lastSegment=-1,all=[],following=true;
+map.on('dragstart',()=>following=false);
+window.updateRoute=(key,points,finished,reset)=>{
+  resizeMap();
+  if(reset||key!==routeKey){
+    lines.forEach(line=>map.removeLayer(line));lines=[];all=[];lastSegment=-1;
+    if(start)map.removeLayer(start);if(end)map.removeLayer(end);start=end=null;
+    routeKey=key;following=true;
+  }
+  for(const p of points){
+    const ll=[p.latitude,p.longitude];
+    if(p.segment!==lastSegment){
+      lines.push(L.polyline([],{color:'#16775d',weight:5,opacity:0.95}).addTo(map));
+      lastSegment=p.segment;
+    }
+    lines[lines.length-1].addLatLng(ll);all.push(ll);
+  }
+  if(!all.length)return;
+  document.getElementById('status').hidden=!tileFailed;
+  if(!start)start=L.circleMarker(all[0],{radius:6,color:'#fff',weight:3,fillColor:'#16775d',fillOpacity:1}).addTo(map);
+  if(end)map.removeLayer(end);
+  end=L.circleMarker(all[all.length-1],{radius:7,color:'#fff',weight:3,fillColor:finished?'#dc624d':'#16775d',fillOpacity:1}).addTo(map);
+  if(finished&&reset)map.fitBounds(L.latLngBounds(all),{padding:[32,32],maxZoom:17});
+  else if(following)map.setView(all[all.length-1],Math.max(map.getZoom(),16),{animate:false});
+};
+window.recenter=()=>{following=true;if(all.length)map.setView(all[all.length-1],16)};
+setTimeout(resizeMap,150);
+window.addEventListener('resize',resizeMap);
+</script>
+</body></html>

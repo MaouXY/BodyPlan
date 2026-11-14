@@ -12,6 +12,28 @@ import retrofit2.http.Query
  * 后端接口（阶段 1 闭环所需）。路径与 /doc.html 中的接口文档一致。
  */
 interface ApiService {
+    @GET("api/v1/sport-sessions")
+    suspend fun sportHistory(): ApiResponse<List<SportSummary>>
+    @GET("api/v1/sport-sessions/{id}")
+    suspend fun sportDetail(@Path("id") id: Long): ApiResponse<SportDetail>
+    @POST("api/v1/sport-sessions")
+    suspend fun saveSport(@Body body: SportSave): ApiResponse<SportSummary>
+    @GET("api/v1/nutrition/foods")
+    suspend fun foods(@Query("keyword") keyword: String, @Query("page") page: Int = 1): ApiResponse<PageResult<NutritionFood>>
+    @GET("api/v1/nutrition/day")
+    suspend fun nutritionDay(@Query("date") date: String): ApiResponse<NutritionDay>
+    @POST("api/v1/nutrition/entries")
+    suspend fun addDiet(@Body body: DietSave): ApiResponse<String>
+    @PUT("api/v1/nutrition/entries/{id}")
+    suspend fun editDiet(@Path("id") id: Long, @Body body: DietSave): ApiResponse<String>
+    @DELETE("api/v1/nutrition/entries/{id}")
+    suspend fun deleteDiet(@Path("id") id: Long): ApiResponse<Unit>
+    @PUT("api/v1/nutrition/target")
+    suspend fun nutritionTarget(@Body body: NutritionTarget): ApiResponse<Unit>
+    @GET("api/v1/messages")
+    suspend fun messages(): ApiResponse<MessageInbox>
+    @PUT("api/v1/messages/{id}/read")
+    suspend fun readMessage(@Path("id") id: Long): ApiResponse<Unit>
 
     @GET("api/v1/exercises")
     suspend fun exercises(@Query("page") page: Long = 1, @Query("size") size: Int = 30,

@@ -15,12 +15,15 @@ import com.google.gson.Gson
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
+import com.maou.bodyplanapp.tracking.RunRepository
 
 enum class Stage { Booting, ConnectionError, Login, Onboarding, Ready }
 
 class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val store = TokenStore(application)
     private val api = ApiClient.service
+    var sessionUserId by mutableStateOf(store.userId)
+        private set
     var stage by mutableStateOf(Stage.Booting)
         private set
     var busy by mutableStateOf(false)
@@ -79,7 +82,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 val unauthorized = (exception is HttpException && exception.code() == 401) ||
                     (exception is ApiFailure && exception.code in listOf(401, 9005))
                 if (unauthorized) {
-                    clearSession()
+                    if (RunRepository.sessions.value.any { it.userId == sessionUserId && it.active }) {
+                        store.token = null
+                        ApiClient.token = null
+                        stage = Stage.ConnectionError
+                        Log.w("BodyPlan", "scenario=session-expired userId=$sessionUserId reason=active-local-workout-retained")
+                    } else clearSession()
                     error = "登录已失效，请重新登录"
                 } else {
                     error = failureMessage(exception, scenario)
@@ -141,15 +149,25 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun acceptLogin(data: AuthResponse) {
+        if (data.user?.role != "USER") {
+            Log.w("BodyPlan", "scenario=app-login userId=${data.user?.id} role=${data.user?.role} reason=role-not-user")
+            throw ApiFailure(403, "教练和管理员请登录 Web 工作台")
+        }
         val token = requireNotNull(data.token) { "登录响应缺少 token" }
         ApiClient.token = token
         store.token = token
         displayName = data.user?.nickname ?: data.user?.username.orEmpty()
         store.username = displayName
+        sessionUserId = data.user?.id
+        store.userId = sessionUserId
         stage = Stage.Booting
     }
 
     fun logout() {
+        if (RunRepository.sessions.value.any { it.userId == sessionUserId && it.active }) {
+            error = "请先结束或放弃当前运动，再退出登录"
+            return
+        }
         if (!busy) clearSession()
     }
 
@@ -170,11 +188,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         loadError = null
         message = null
         displayName = ""
+        sessionUserId = null
         stage = Stage.Login
     }
 
     private suspend fun loadProfileAndRoute() {
         profile = api.profile().required()
+        sessionUserId = profile?.userId
+        store.userId = sessionUserId
         val result = api.latestFitnessTest()
         fitness = if (result.code == 10201) {
             Log.w("BodyPlan", "scenario=onboarding-resume userId=${profile?.userId} code=${result.code} reason=${result.message}")

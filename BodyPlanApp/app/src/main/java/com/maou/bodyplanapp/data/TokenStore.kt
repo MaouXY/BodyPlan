@@ -19,6 +19,10 @@ class TokenStore(context: Context) {
         get() = prefs.getString(KEY_USERNAME, null)
         set(value) = prefs.edit().putString(KEY_USERNAME, value).apply()
 
+    var userId: Long?
+        get() = prefs.getLong("userId", 0).takeIf { it > 0 }
+        set(value) { prefs.edit().putLong("userId", value ?: 0).apply() }
+
     fun clear() {
         prefs.edit().clear().apply()
     }

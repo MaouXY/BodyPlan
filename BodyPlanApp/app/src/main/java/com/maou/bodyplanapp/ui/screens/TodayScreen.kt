@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.maou.bodyplanapp.ui.AppViewModel
+import com.maou.bodyplanapp.ui.WellnessViewModel
 import com.maou.bodyplanapp.ui.components.Metric
 import com.maou.bodyplanapp.ui.components.EmptyContent
 import com.maou.bodyplanapp.ui.components.AppIconButton
@@ -34,7 +35,8 @@ import com.maou.bodyplanapp.ui.theme.Mint
 import java.util.Calendar
 
 @Composable
-fun TodayScreen(viewModel: AppViewModel, onOpenPlan: () -> Unit = {}) {
+fun TodayScreen(viewModel: AppViewModel, onOpenPlan: () -> Unit = {}, wellness: WellnessViewModel? = null,
+    onOpenSport: () -> Unit = {}, onOpenNutrition: () -> Unit = {}) {
     var showFeedback by remember { mutableStateOf(false) }
     var selectedItem by remember { mutableStateOf<Long?>(null) }
     var selectedName by remember { mutableStateOf("") }
@@ -79,6 +81,26 @@ fun TodayScreen(viewModel: AppViewModel, onOpenPlan: () -> Unit = {}) {
             Metric("${viewModel.streak?.maxStreak ?: 0}", "最佳连续 / 天", Modifier.weight(1f))
         }
         Column(Modifier.padding(horizontal = 20.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        wellness?.let { data ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedCard(onClick = onOpenSport, modifier = Modifier.weight(1f)) {
+                    Column(Modifier.padding(12.dp)) {
+                        Text("自主运动", style = MaterialTheme.typography.labelLarge)
+                        val format = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.ROOT)
+                        val distance = data.sports.filter { format.format(java.util.Date(it.startedAt)) == todayDate() }.sumOf { it.distanceM } / 1000
+                        Text(if (data.sportsLoaded) "${String.format(java.util.Locale.ROOT, "%.2f", distance)} 公里" else "--",
+                            style = MaterialTheme.typography.titleMedium)
+                    }
+                }
+                OutlinedCard(onClick = onOpenNutrition, modifier = Modifier.weight(1f)) {
+                    Column(Modifier.padding(12.dp)) {
+                        Text("饮食摄入", style = MaterialTheme.typography.labelLarge)
+                        Text(data.todayNutrition?.let { "${String.format(java.util.Locale.ROOT, "%.0f", it.totals.kcal)} 千卡" } ?: "--",
+                            style = MaterialTheme.typography.titleMedium)
+                    }
+                }
+            }
+        }
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text("今日安排", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
             TextButton(onClick = onOpenPlan) { Text("查看计划") }
