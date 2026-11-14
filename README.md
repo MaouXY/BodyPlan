@@ -9,6 +9,12 @@
 中断恢复、修改档案、自由打卡、实际训练反馈、月历、身体变化与历史计划、标签名称显示和异常日志。
 现场彩排由使用者按清单执行，不能把编译及单元测试通过等同于三端现场验收通过。
 
+## 新增运动、教练与饮食（2026-11-15）
+
+第一版已接入 GPS 运动记录、距离与配速目标、教练学员管理与站内提醒，以及饮食营养记录。
+查看 [新增功能验收说明](doc/新增功能验收说明.md) 获取安装包位置、专用账号、操作步骤、测试结果与限制。
+本机本轮迁移已执行，旧账号与历史打卡没有重置；迁移前备份位于忽略目录 `.local/backups/`。
+
 ## 图解导览（建议先看这个）
 
 打开 **`doc/diagrams/index.html`**，里面有六张交互图的目录与阅读顺序：
@@ -29,12 +35,12 @@
 ```
 BodyPlan/
 ├── BodyPlanApi/          Spring Boot 后端（端口 8993）
-│   ├── sql/              建表与种子数据（01~05），演示验收数据（06）
+│   ├── sql/              基础表（01~05）、原演示（06）、动作快照（07）、新增模块（08）、专用演示（09）
 │   └── src/main/java/com/bodyplan/
 │       ├── common/       统一响应、异常、JWT、MyBatis-Plus 配置
-│       └── module/       auth / user / profile / fitness / training / record / admin
-├── BodyPlanApp/          Android 用户端（登录、建档、计划、打卡、档案）
-├── BodyPlanWeb/          Vue 3 管理端（端口 5174，4 个模块）
+│       └── module/       auth / user / profile / fitness / training / record / admin / activity / coaching / nutrition
+├── BodyPlanApp/          Android 用户端（训练、运动路线、饮食、消息、档案）
+├── BodyPlanWeb/          Vue 3 管理员与教练工作台（端口 5174）
 └── doc/
     ├── diagrams/         六张交互架构图 + index.html
     ├── screenshots/      App 界面截图
@@ -52,10 +58,14 @@ mysql -uroot -p < BodyPlanApi/sql/03_schema_record.sql
 mysql -uroot -p < BodyPlanApi/sql/04_seed_data.sql
 mysql -uroot -p < BodyPlanApi/sql/05_schema_exercise_flags.sql
 mysql -uroot -p < BodyPlanApi/sql/06_demo_acceptance_data.sql
+mysql -uroot -p < BodyPlanApi/sql/07_checkin_exercise.sql
+mysql -uroot -p < BodyPlanApi/sql/08_wellness_modules.sql
+mysql -uroot -p < BodyPlanApi/sql/09_wellness_demo.sql
 ```
 
-以上 SQL 由使用者执行。已有库且已执行 01~05 时，只执行 06；06 不重置旧账号或已有打卡。
-Windows 可在 MySQL 命令行用 `source` 执行绝对路径，具体命令见验收清单。
+新环境按顺序执行，已有环境只执行未应用的迁移。06 是原演示可选数据，09 是本轮专用演示数据；
+都不重置旧账号或已有打卡。
+Windows 可在 MySQL 命令行用 `source` 执行绝对路径；执行前先备份并确认目标库。
 
 **2. 后端**
 
@@ -94,6 +104,8 @@ npm run dev                  # http://127.0.0.1:5174
 | `demo_ready` | `123456` | 执行 06 后新增：已建档，带 4 周演示计划和近期历史 |
 | `demo_new` | `123456` | 执行 06 后新增：首次未建档，完成演示后不会自动重置 |
 | `demo_compare` | `123456` | 执行 06 后新增：增肌对比档案与身体/打卡历史，无预置计划 |
+| `wellness_demo` | `123456` | 执行 09 后新增：移动端新功能演示账号，带当天饮食与 7 天计划 |
+| `coach_demo` | `123456` | 执行 09 后新增：教练工作台，已分配 wellness_demo |
 
 ## 技术栈
 
