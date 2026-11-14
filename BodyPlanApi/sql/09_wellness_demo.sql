@@ -41,3 +41,20 @@ CROSS JOIN (SELECT 0 AS n UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT
 CROSS JOIN (SELECT id,name,ROW_NUMBER() OVER(ORDER BY difficulty,sort_no,id) AS rn
             FROM exercise WHERE status=1 AND deleted=0 AND (contra_flags IS NULL OR contra_flags='')) e
 WHERE p.id=942001 AND p.user_id=@student_id AND e.rn<=3;
+
+INSERT IGNORE INTO nutrition_target (user_id,target_date,goal,kcal,protein,fat,carbohydrate,fiber)
+SELECT @student_id,CURDATE(),'MAINTAIN',2000,100,60,250,25 WHERE @student_id IS NOT NULL;
+
+INSERT IGNORE INTO diet_entry
+(id,user_id,entry_date,meal,food_id,food_name,grams,kcal,protein,fat,carbohydrate,fiber,source)
+SELECT d.id,@student_id,CURDATE(),d.meal,f.id,f.name,d.grams,
+ROUND(f.kcal*d.grams/100,2),ROUND(f.protein*d.grams/100,2),ROUND(f.fat*d.grams/100,2),
+ROUND(f.carbohydrate*d.grams/100,2),ROUND(f.fiber*d.grams/100,2),CONCAT('演示食谱 · ',f.source)
+FROM (
+    SELECT 943001 AS id,810002 AS food_id,40 AS grams,'BREAKFAST' AS meal
+    UNION ALL SELECT 943002,810005,250,'BREAKFAST'
+    UNION ALL SELECT 943003,810008,100,'BREAKFAST'
+    UNION ALL SELECT 943004,810001,150,'LUNCH'
+    UNION ALL SELECT 943005,810003,120,'LUNCH'
+    UNION ALL SELECT 943006,810006,100,'LUNCH'
+) d JOIN nutrition_food f ON f.id=d.food_id WHERE @student_id IS NOT NULL;

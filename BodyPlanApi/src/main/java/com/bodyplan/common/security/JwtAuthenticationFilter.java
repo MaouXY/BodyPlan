@@ -1,12 +1,15 @@
 package com.bodyplan.common.security;
 
 import com.bodyplan.common.exception.ErrorCode;
+import com.bodyplan.module.user.entity.UserAccount;
+import com.bodyplan.module.user.mapper.UserAccountMapper;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataAccessException;
 import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -18,6 +21,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Objects;
 
 @Slf4j
 @Component
@@ -26,6 +30,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtTokenService jwtTokenService;
     private final AuthenticationEntryPoint authenticationEntryPoint;
+    private final UserAccountMapper userAccountMapper;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
@@ -45,6 +50,22 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         try {
             CurrentUser currentUser = jwtTokenService.parseToken(token);
+            UserAccount account;
+            try {
+                account = userAccountMapper.selectById(currentUser.getPrincipalId());
+            } catch (DataAccessException exception) {
+                log.error("account verification failed, scenario=jwt-account, userId={}, uri={}",
+                        currentUser.getPrincipalId(), request.getRequestURI(), exception);
+                throw exception;
+            }
+            if (account == null || !Objects.equals(account.getStatus(), 1)
+                    || !Objects.equals(account.getRole(), currentUser.getRoleCode())) {
+                log.warn("account access revoked, scenario=jwt-account, userId={}, uri={}, accountPresent={}, status={}, roleChanged={}",
+                        currentUser.getPrincipalId(), request.getRequestURI(), account != null,
+                        account == null ? null : account.getStatus(),
+                        account != null && !Objects.equals(account.getRole(), currentUser.getRoleCode()));
+                throw new JwtAuthenticationException("Account disabled, deleted or role changed", null);
+            }
             UsernamePasswordAuthenticationToken authenticationToken = new UsernamePasswordAuthenticationToken(
                     currentUser,
                     null,
@@ -59,7 +80,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     "jwt validation failed, scenario=jwt-parse, uri={}, tokenPresent={}, reason={}",
                     request.getRequestURI(),
                     true,
-                    exception.getMessage()
+                    exception.getMessage(),
+                    exception
             );
             authenticationEntryPoint.commence(request, response, exception);
         }

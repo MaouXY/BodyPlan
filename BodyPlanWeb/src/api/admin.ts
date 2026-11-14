@@ -46,11 +46,11 @@ export function fetchUsers(query: UserQuery) {
   })
 }
 
-export function fetchUserDetail(id: number) {
+export function fetchUserDetail(id: string) {
   return http.get<AdminUserDetail>(`/v1/admin/users/${id}`)
 }
 
-export function updateUserStatus(id: number, status: number) {
+export function updateUserStatus(id: string, status: number) {
   return http.put<void>(`/v1/admin/users/${id}/status`, { status })
 }
 

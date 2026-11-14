@@ -126,7 +126,7 @@ onMounted(load)
         <el-table-column label="角色" width="90">
           <template #default="{ row }">
             <el-tag :type="row.role === 'ADMIN' ? 'danger' : 'info'" size="small">
-              {{ row.role === 'ADMIN' ? '管理员' : '普通用户' }}
+              {{ row.role === 'ADMIN' ? '管理员' : row.role === 'COACH' ? '教练' : '普通用户' }}
             </el-tag>
           </template>
         </el-table-column>

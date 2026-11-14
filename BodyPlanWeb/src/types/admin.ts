@@ -36,7 +36,7 @@ export interface AdminCheckinRankingItem {
 }
 
 export interface AdminUserItem {
-  id: number
+  id: string
   username: string
   nickname: string
   phone?: string | null
