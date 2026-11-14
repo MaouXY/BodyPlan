@@ -1,5 +1,9 @@
 const TOKEN_KEY = 'bodyplan-token'
 const NAME_KEY = 'bodyplan-display-name'
+const ROLE_KEY = 'bodyplan-role'
+
+export const getRole = () => localStorage.getItem(ROLE_KEY) ?? ''
+export const setRole = (role: string) => localStorage.setItem(ROLE_KEY, role)
 
 export function getToken() {
   return localStorage.getItem(TOKEN_KEY) ?? ''
@@ -12,6 +16,7 @@ export function setToken(token: string) {
 export function clearToken() {
   localStorage.removeItem(TOKEN_KEY)
   localStorage.removeItem(NAME_KEY)
+  localStorage.removeItem(ROLE_KEY)
 }
 
 export function getDisplayName() {

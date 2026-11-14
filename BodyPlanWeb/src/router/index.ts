@@ -21,6 +21,21 @@ const router = createRouter({
       component: AppShell,
       children: [
         {
+          path: 'coach/students',
+          component: () => import('@/views/coach/CoachStudentsView.vue'),
+          meta: { title: '学员训练', coach: true },
+        },
+        {
+          path: 'admin/coaches',
+          component: () => import('@/views/admin/AdminCoachesView.vue'),
+          meta: { title: '教练与学员' },
+        },
+        {
+          path: 'admin/foods',
+          component: () => import('@/views/admin/AdminFoodsView.vue'),
+          meta: { title: '食物营养库' },
+        },
+        {
           path: 'admin/stats',
           name: 'admin-stats',
           component: () => import('@/views/admin/AdminStatsView.vue'),
@@ -66,6 +81,12 @@ router.beforeEach((to) => {
   if (!authStore.token) {
     return { name: 'login', query: { redirect: to.fullPath } }
   }
+
+  if (!['ADMIN', 'COACH'].includes(authStore.role)) {
+    authStore.logout()
+    return { name: 'login' }
+  }
+  if (authStore.role === 'COACH' && !to.meta.coach) return '/coach/students'
 
   return true
 })

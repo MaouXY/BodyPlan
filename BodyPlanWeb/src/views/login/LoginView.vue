@@ -41,30 +41,20 @@ async function handleLogin() {
 <template>
   <div class="login-page">
     <section class="login-hero">
-      <p class="login-hero__eyebrow">BodyPlan · 管理端</p>
-      <h1>个性化健身管理系统</h1>
-      <p class="login-hero__text">
-        管理端覆盖用户与建档档案查看、身体数据趋势、动作标签维护，以及打卡数据统计与排行。
-        训练计划由后端按“目标 + 体能等级 + 重点部位 + 伤病禁忌 + 场地器械”五要素规则生成，
-        管理端负责数据查看与内容维护。
-      </p>
-      <div class="login-hero__chips">
-        <span>用户管理</span>
-        <span>身体数据</span>
-        <span>动作标签</span>
-        <span>打卡统计</span>
-      </div>
+      <p class="login-hero__eyebrow">BodyPlan</p>
+      <h1>律动健身</h1>
+      <p class="login-hero__text">管理与教练工作台</p>
     </section>
 
     <section class="login-card">
       <div class="login-card__header">
-        <h2>管理员登录</h2>
-        <p>仅管理员账号可登录管理端，普通用户请使用 Android App。</p>
+        <h2>账号登录</h2>
+        <p>管理员 / 教练</p>
       </div>
 
       <el-form label-position="top" @submit.prevent="handleLogin">
         <el-form-item label="账号">
-          <el-input v-model="form.username" placeholder="请输入管理员账号" />
+          <el-input v-model="form.username" placeholder="账号" />
         </el-form-item>
         <el-form-item label="密码">
           <el-input

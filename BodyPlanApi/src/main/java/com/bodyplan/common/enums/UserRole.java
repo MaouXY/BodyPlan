@@ -4,6 +4,7 @@ import java.util.Arrays;
 
 public enum UserRole {
     USER,
+    COACH,
     ADMIN;
 
     public static UserRole fromCode(String code) {

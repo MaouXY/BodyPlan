@@ -6,6 +6,7 @@ import {
   DataAnalysis,
   DataLine,
   User,
+  Bowl,
 } from '@element-plus/icons-vue'
 
 import AppSidebar from '@/components/AppSidebar.vue'
@@ -17,14 +18,31 @@ const router = useRouter()
 const appStore = useAppStore()
 const authStore = useAuthStore()
 
-const menus = computed(() => [
+const menus = computed(() => authStore.role === 'COACH' ? [
+  { title: '教练工作台', items: [{ label: '学员训练', path: '/coach/students', icon: User }] },
+] : [
   {
     title: '数据与用户',
     items: [
       {
+        label: '教练与学员',
+        path: '/admin/coaches',
+        icon: User,
+      },
+      {
+        label: '学员训练',
+        path: '/coach/students',
+        icon: DataLine,
+      },
+      {
         label: '打卡数据统计',
         path: '/admin/stats',
         icon: DataAnalysis,
+      },
+      {
+        label: '食物营养库',
+        path: '/admin/foods',
+        icon: Bowl,
       },
       {
         label: '用户管理',
@@ -76,7 +94,7 @@ function handleLogout() {
           <el-dropdown>
             <span class="shell__user">
               {{ authStore.displayName }}
-              <small>管理员</small>
+              <small>{{ authStore.role === 'COACH' ? '教练' : '管理员' }}</small>
             </span>
             <template #dropdown>
               <el-dropdown-menu>
